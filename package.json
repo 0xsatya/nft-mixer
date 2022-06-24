@@ -1,0 +1,55 @@
+{
+  "name": "hardhat-project",
+  "scripts": {
+    "start": "hardhat node",
+    "compile": "hardhat compile",
+    "compile-circuits": "npm run scripts/compile-circuits.js",
+    "deploy-contract": "hardhat deploy:contract",
+    "test": "hardhat test",
+    "test:report-gas": "REPORT_GAS=true hardhat test",
+    "test:coverage": "hardhat coverage"
+  },
+  "devDependencies": {
+    "@nomiclabs/hardhat-ethers": "^2.0.0",
+    "@nomiclabs/hardhat-etherscan": "^3.0.0",
+    "@nomiclabs/hardhat-waffle": "^2.0.0",
+    "chai": "^4.2.0",
+    "circomlib": "^2.0.5",
+    "dotenv": "^16.0.0",
+    "download": "^8.0.0",
+    "eslint": "^7.29.0",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-config-standard": "^16.0.3",
+    "eslint-plugin-import": "^2.23.4",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-prettier": "^3.4.0",
+    "eslint-plugin-promise": "^5.1.0",
+    "ethereum-waffle": "^3.0.0",
+    "ethers": "^5.0.0",
+    "hardhat": "^2.9.9",
+    "hardhat-circom": "^3.3.0",
+    "hardhat-gas-reporter": "^1.0.4",
+    "js-logger": "^1.6.1",
+    "prettier": "^2.3.2",
+    "prettier-plugin-solidity": "^1.0.0-beta.13",
+    "rimraf": "^3.0.2",
+    "snarkjs": "^0.4.22",
+    "solhint": "^3.3.6",
+    "solidity-coverage": "^0.7.16"
+  },
+  "config": {
+    "solidity": {
+      "version": "0.8.4"
+    },
+    "paths": {
+      "contracts": "./contracts",
+      "circuit": "./circuits",
+      "tests": "./test",
+      "cache": "./cache",
+      "build": {
+        "snark": "./circuits/build/snark",
+        "contracts": "./circuits/build/contracts"
+      }
+    }
+  }
+}
