@@ -12,7 +12,7 @@ template HashLeftRight() {
     signal input right;
     signal output hash;
 
-    component hasher = MiMCSponge(2, 2, 1);
+    component hasher = MiMCSponge(2, 220, 1);
     hasher.ins[0] <== left;
     hasher.ins[1] <== right;
     hasher.k <== 0;
@@ -58,35 +58,44 @@ template MerkleTreeChecker(levels) {
 //---------END--------------
 
 // computes Pedersen(nullifier + secret)
+
 template CommitmentHasher() {
     signal input nullifier;
     signal input secret;
+    signal input nftAddress;
+    signal input tokenId;
     signal output commitment;
     signal output nullifierHash;
 
     component commitmentHasher = Pedersen(496);
     component nullifierHasher = Pedersen(248);
-    component nullifierBits = Num2Bits(248);
-    component secretBits = Num2Bits(248);
+    component nullifierBits = Num2Bits(124);
+    component nftAdrBits = Num2Bits(124);
+    component tokenIdBits = Num2Bits(124);
+    component secretBits = Num2Bits(124);
     nullifierBits.in <== nullifier;
+    nftAdrBits.in <== nftAddress;
+    tokenIdBits.in <== tokenId;
     secretBits.in <== secret;
-    for (var i = 0; i < 248; i++) {
+    for (var i = 0; i < 124; i++) {
         nullifierHasher.in[i] <== nullifierBits.out[i];
+        nullifierHasher.in[i + 124] <== nftAdrBits.out[i];
         commitmentHasher.in[i] <== nullifierBits.out[i];
-        commitmentHasher.in[i + 248] <== secretBits.out[i];
+        commitmentHasher.in[i + 124] <== nftAdrBits.out[i];
+        commitmentHasher.in[i + 248] <== tokenIdBits.out[i];
+        commitmentHasher.in[i + 372] <== secretBits.out[i];
     }
 
     commitment <== commitmentHasher.out[0];
     nullifierHash <== nullifierHasher.out[0];
-
-    log(commitment);
-    log(nullifierHash);
 }
 
 // Verifies that commitment that corresponds to given secret and nullifier is included in the merkle tree of deposits
 template Withdraw(levels) {
     signal input root;
     signal input nullifierHash;
+    signal input nftAddress;
+    signal input tokenId;
     signal input recipient; // not taking part in any computations
     signal input relayer;  // not taking part in any computations
     signal input fee;      // not taking part in any computations
@@ -99,6 +108,8 @@ template Withdraw(levels) {
     component hasher = CommitmentHasher();
     hasher.nullifier <== nullifier;
     hasher.secret <== secret;
+    hasher.nftAddress <== nftAddress;
+    hasher.tokenId <== tokenId;
     hasher.nullifierHash === nullifierHash;
 
     component tree = MerkleTreeChecker(levels);
@@ -122,17 +133,19 @@ template Withdraw(levels) {
     refundSquare <== refund * refund;
 }
 
-component main {public [root,nullifierHash]} = Withdraw(2);
+component main {public [root , nullifierHash]} = Withdraw(1);
 
 /* INPUT = {
-    "root": "46575847574",
-    "nullifierHash": "18011937081236784722557281247837890117289455404380326156275752372562136820138",
+    "root": "16296659098868975318610681305956664471851509760143234002578597065987613223531",
+    "nullifierHash": "11172816448033496386538185216595920505082224450690847824246062112016923332446",
     "recipient": "222",
     "relayer": "333",
     "fee": "100",
     "refund": "20",
     "nullifier": "444",
+    "nftAddress": "3444465656",
+    "tokenId": "100",
     "secret": "555",
-    "pathElements": [0,0],
-    "pathIndices": [0,0]
+    "pathElements": [0],
+    "pathIndices": [0]
 } */
