@@ -1,10 +1,10 @@
 pragma circom 2.0.3;
 
-include "circomlib/circuits/bitify.circom";
-include "circomlib/circuits/pedersen.circom";
+include "../node_modules/circomlib/circuits/bitify.circom";
+include "../node_modules/circomlib/circuits/pedersen.circom";
 
 //-------------Merkle Tree--------------
-include "circomlib/circuits/mimcsponge.circom";
+include "../node_modules/circomlib/circuits/mimcsponge.circom";
 
 // Computes MiMC([left, right])
 template HashLeftRight() {
