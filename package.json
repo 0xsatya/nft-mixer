@@ -3,7 +3,7 @@
   "scripts": {
     "start": "hardhat node",
     "compile": "hardhat compile",
-    "compile-circuits": "npm run scripts/compile-circuits.js",
+    "buildCircuit": "npx hardhat run scripts/compile-circuits.js",
     "deploy-contract": "hardhat deploy:contract",
     "test": "hardhat test",
     "test:report-gas": "REPORT_GAS=true hardhat test",
@@ -30,6 +30,7 @@
     "hardhat-circom": "^3.3.0",
     "hardhat-gas-reporter": "^1.0.4",
     "js-logger": "^1.6.1",
+    "mkdirp": "^1.0.4",
     "prettier": "^2.3.2",
     "prettier-plugin-solidity": "^1.0.0-beta.13",
     "rimraf": "^3.0.2",
@@ -51,5 +52,6 @@
         "contracts": "./circuits/build/contracts"
       }
     }
-  }
+  },
+  "dependencies": {}
 }

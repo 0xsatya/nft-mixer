@@ -1,10 +1,12 @@
 #!/bin/bash -e
 POWERS_OF_TAU=15 # circuit will support max 2^POWERS_OF_TAU constraints  
+PATH=circuit-test
 CIRCUIT=multiplier2
-mkdir -p tau
-mkdir -p build
-mkdir -p keys
-mkdir -p solidity
+INPUT=input
+mkdir ./${PATH}/tau
+mkdir ./${PATH}/build
+mkdir ./${PATH}/keys
+mkdir ./${PATH}/solidity
 
 if [ ! -f tau/ptau$POWERS_OF_TAU ]; then
   echo "Downloading powers of tau file"
@@ -34,7 +36,7 @@ if [ "$1" == "build" ]; then
 fi
 
 # generate witness from input.json file
-node build/${CIRCUIT}_js/generate_witness.js build/${CIRCUIT}_js/${CIRCUIT}.wasm circuits/input.json circuits/${CIRCUIT}.wtns
+node build/${CIRCUIT}_js/generate_witness.js build/${CIRCUIT}_js/${CIRCUIT}.wasm circuits/${INPUT}.json circuits/${CIRCUIT}.wtns
 
 echo "----- Generate zk-proof -----"
 # Generate a zk-proof associated to the circuit and the witness. This generates proof.json and public.json
