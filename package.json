@@ -3,7 +3,7 @@
   "scripts": {
     "start": "hardhat node",
     "compile": "hardhat compile",
-    "buildCircuit": "npx hardhat run scripts/compile-circuits.js",
+    "build-circuit": "npx hardhat run scripts/compile-circuits.js",
     "deploy-contract": "hardhat deploy:contract",
     "test": "hardhat test",
     "test:report-gas": "REPORT_GAS=true hardhat test",

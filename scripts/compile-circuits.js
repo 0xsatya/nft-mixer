@@ -10,9 +10,9 @@ const { config } = require("../package.json");
 logger.useDefaults();
 
 async function main() {
-  const buildPath = "./circuits";
-  const CIRCUIT = "nftMixer";
-  const PATH = "circuit-test";
+  const buildPath = "./circuits/multiplier";
+  const CIRCUIT = "multiplier";
+  const PATH = `circuit-build-${CIRCUIT}`;
   const INPUT = `${CIRCUIT}-input`;
   const solidityVersion = config.solidity.version;
 
@@ -35,9 +35,10 @@ async function main() {
     `circom ${buildPath}/${CIRCUIT}.circom --r1cs --wasm --sym --output ./${PATH}/build`
   );
 
-  // await exec(
-  //   `circom2 ${buildPath}/${CIRCUIT}.circom --r1cs --wasm --sym --output ./${PATH}/build`
-  // );
+  logger.log("----------- compiling circuit --------")
+  await exec(
+    `circom2 ${buildPath}/${CIRCUIT}.circom --r1cs --wasm --sym --output ./${PATH}/build`
+  );
 
   logger.log("-----------zKey-----------");
   await zKey.newZKey(
