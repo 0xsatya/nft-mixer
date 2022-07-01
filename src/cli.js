@@ -2,6 +2,9 @@
 // Works both in browser and node.js
 
 require("dotenv").config();
+const { ethers } = require("hardhat");
+const { BigNumber } = ethers;
+const { utils } = ethers;
 const fs = require("fs");
 const axios = require("axios");
 const assert = require("assert");
@@ -9,13 +12,14 @@ const snarkjs = require("snarkjs");
 const crypto = require("crypto");
 const circomlib = require("circomlib");
 const bigInt = snarkjs.bigInt;
-const merkleTree = require("fixed-merkle-tree");
+const MerkleTree = require("fixed-merkle-tree");
 const Web3 = require("web3");
 const buildGroth16 = require("snarkjs/src/groth16");
 const websnarkUtils = require("wasmsnark/src/utils");
 const { toWei, fromWei, toBN, BN } = require("web3-utils");
 const config = require("./config");
 const program = require("commander");
+const { toFixedHex, poseidonHash2 } = require("./utils");
 
 let web3, tornado, circuit, proving_key, groth16, erc20, senderAccount, netId;
 let MERKLE_TREE_HEIGHT, ETH_AMOUNT, TOKEN_AMOUNT, PRIVATE_KEY;
@@ -25,8 +29,7 @@ const inBrowser = typeof window !== "undefined";
 let isLocalRPC = false;
 
 /** Generate random number of specified byte length */
-const rbigint = (nbytes) =>
-  snarkjs.bigInt.leBuff2int(crypto.randomBytes(nbytes));
+const rbigint = (nbytes) => BigInt.leBuff2int(crypto.randomBytes(nbytes));
 console.log("rbigint", rbigint);
 
 /** Compute pedersen hash */
@@ -39,7 +42,7 @@ function toHex(number, length = 32) {
   const str =
     number instanceof Buffer
       ? number.toString("hex")
-      : bigInt(number).toString(16);
+      : BigInt(number).toString(16);
   console.log("number to hex", "0x" + str.padStart(length * 2, "0"));
   return "0x" + str.padStart(length * 2, "0");
 }
@@ -48,37 +51,29 @@ function toHex(number, length = 32) {
 async function printETHBalance({ address, name }) {
   console.log(
     `${name} ETH balance is`,
-    web3.utils.fromWei(await web3.eth.getBalance(address))
+    web3.utils.fromWei(await ethers.getBalance(address))
   );
 }
 
-/** Display ERC20 account balance */
-async function printERC20Balance({ address, name, tokenAddress }) {
-  const erc20ContractJson = require(__dirname +
-    "/../build/contracts/ERC20Mock.json");
-  erc20 = tokenAddress
-    ? new web3.eth.Contract(erc20ContractJson.abi, tokenAddress)
-    : erc20;
-  console.log(
-    `${name} Token Balance is`,
-    web3.utils.fromWei(await erc20.methods.balanceOf(address).call())
-  );
+/** Display ERC21 account balance */
+async function checkERC21Owner({ address, name, tokenAddress, tokenId }) {
+  // todo: check token ower;
 }
 
 /**
  * Create deposit object from secret and nullifier
  */
-function createDeposit({ nullifier, secret, nftAddr, tokenId }) {
-  const deposit = { nullifier, secret, nftAddr, tokenId };
-  const nfr = { nullifier, nftAddr };
+function createDeposit({ nullifier, secret, tokenAddr, tokenId }) {
+  const deposit = { nullifier, secret, tokenAddr, tokenId };
+  const nfr = { nullifier, tokenAddr };
   nfr.preimage = Buffer.concat([
     nfr.nullifier.leInt2Buff(16),
-    nfr.nftAddr.leInt2Buff(16),
+    nfr.tokenAddr.leInt2Buff(16),
   ]);
   deposit.preimage = Buffer.concat([
     deposit.nullifier.leInt2Buff(16),
     deposit.secret.leInt2Buff(16),
-    deposit.nftAddr.leInt2Buff(16),
+    deposit.tokenAddr.leInt2Buff(16),
     deposit.tokenId.leInt2Buff(16),
   ]);
   deposit.commitment = pedersenHash(deposit.preimage);
@@ -98,76 +93,74 @@ function createDeposit({ nullifier, secret, nftAddr, tokenId }) {
  * @param currency Сurrency
  * @param amount Deposit amount
  */
-async function deposit({ currency, amount, nftAddr, tokenId }) {
+async function deposit({
+  currency,
+  amount,
+  tokenAddr,
+  tokenId,
+  currNftOwnerAddr,
+}) {
   const deposit = createDeposit({
     nullifier: rbigint(31),
     secret: rbigint(31),
-    nftAddr: BigInt(nftAddr),
+    tokenAddr: BigInt(tokenAddr),
     tokenId: BigInt(tokenId),
   });
 
   console.log("deposit ~ deposit", deposit);
 
   const note = toHex(deposit.preimage, 64);
-  const noteString = `blender-${nftAddr}-${tokenId}-${note}`;
+  const noteString = `blender-${tokenAddr}-${tokenId}-${note}`;
 
   console.log(`Your note: ${noteString}`);
 
   if (currency === "eth") {
-    await printETHBalance({ address: tornado._address, name: "Tornado" });
-    await printETHBalance({ address: senderAccount, name: "Sender account" });
-    const value = isLocalRPC
-      ? ETH_AMOUNT
-      : fromDecimals({ amount, decimals: 18 });
-
-    console.log("Submitting deposit transaction");
-
-    await tornado.methods
-      .deposit(toHex(deposit.commitment))
-      .send({ value, from: senderAccount, gas: 2e6 });
-    await printETHBalance({ address: tornado._address, name: "Tornado" });
-    await printETHBalance({ address: senderAccount, name: "Sender account" });
+    // await printETHBalance({ address: tornado._address, name: "Tornado" });
+    // await printETHBalance({ address: senderAccount, name: "Sender account" });
+    // const value = isLocalRPC
+    //   ? ETH_AMOUNT
+    //   : fromDecimals({ amount, decimals: 18 });
+    // console.log("Submitting deposit transaction");
+    // await blender
+    //   .deposit(toHex(deposit.commitment))
+    //   .send({ value, from: senderAccount, gas: 2e6 });
+    // await printETHBalance({ address: tornado._address, name: "Tornado" });
+    // await printETHBalance({ address: senderAccount, name: "Sender account" });
   } else {
     // a token
-    await printERC20Balance({ address: tornado._address, name: "Tornado" });
-    await printERC20Balance({ address: senderAccount, name: "Sender account" });
-
-    const decimals = isLocalRPC
-      ? 18
-      : config.deployments[`netId${netId}`][currency].decimals;
-
-    const tokenAmount = isLocalRPC
-      ? TOKEN_AMOUNT
-      : fromDecimals({ amount, decimals });
-
-    if (isLocalRPC) {
-      console.log("Minting some test tokens to deposit");
-      await erc20.methods
-        .mint(senderAccount, tokenAmount)
-        .send({ from: senderAccount, gas: 2e6 });
-    }
-
-    const allowance = await erc20.methods
-      .allowance(senderAccount, tornado._address)
-      .call({ from: senderAccount });
-
-    console.log("Current allowance is", fromWei(allowance));
-
-    if (toBN(allowance).lt(toBN(tokenAmount))) {
-      console.log("Approving tokens for deposit");
-      await erc20.methods
-        .approve(tornado._address, tokenAmount)
-        .send({ from: senderAccount, gas: 1e6 });
-    }
-
-    console.log("Submitting deposit transaction");
-
-    await tornado.methods
-      .deposit(toHex(deposit.commitment))
-      .send({ from: senderAccount, gas: 2e6 });
-
-    await printERC20Balance({ address: tornado._address, name: "Tornado" });
-    await printERC20Balance({ address: senderAccount, name: "Sender account" });
+    // todo: check token onwer;
+    // todo: approve token transfer to nftMixer;
+    // todo: send transaction to nifMixer;
+    // await printERC20Balance({ address: tornado._address, name: "Tornado" });
+    // await printERC20Balance({ address: senderAccount, name: "Sender account" });
+    // const decimals = isLocalRPC
+    //   ? 18
+    //   : config.deployments[`netId${netId}`][currency].decimals;
+    // const tokenAmount = isLocalRPC
+    //   ? TOKEN_AMOUNT
+    //   : fromDecimals({ amount, decimals });
+    // if (isLocalRPC) {
+    //   console.log("Minting some test tokens to deposit");
+    //   await erc20.methods
+    //     .mint(senderAccount, tokenAmount)
+    //     .send({ from: senderAccount, gas: 2e6 });
+    // }
+    // const allowance = await erc20.methods
+    //   .allowance(senderAccount, tornado._address)
+    //   .call({ from: senderAccount });
+    // console.log("Current allowance is", fromWei(allowance));
+    // if (toBN(allowance).lt(toBN(tokenAmount))) {
+    //   console.log("Approving tokens for deposit");
+    //   await erc20.methods
+    //     .approve(tornado._address, tokenAmount)
+    //     .send({ from: senderAccount, gas: 1e6 });
+    // }
+    // console.log("Submitting deposit transaction");
+    // await blender
+    //   .deposit(toHex(deposit.commitment))
+    //   .send({ from: senderAccount, gas: 2e6 });
+    // await printERC20Balance({ address: tornado._address, name: "Tornado" });
+    // await printERC20Balance({ address: senderAccount, name: "Sender account" });
   }
 
   return noteString;
@@ -179,17 +172,18 @@ async function deposit({ currency, amount, nftAddr, tokenId }) {
  * in it and generates merkle proof
  * @param deposit Deposit object
  */
-async function generateMerkleProof(deposit) {
+async function generateMerkleProof(deposit, { blenderContract }) {
   // Get all deposit events from smart contract and assemble merkle tree from them
-  console.log("Getting current state from tornado contract");
-  const events = await tornado.getPastEvents("Deposit", {
-    fromBlock: 0,
-    toBlock: "latest",
-  });
-  const leaves = events
-    .sort((a, b) => a.returnValues.leafIndex - b.returnValues.leafIndex) // Sort events in chronological order
-    .map((e) => e.returnValues.commitment);
-  const tree = new merkleTree(MERKLE_TREE_HEIGHT, leaves);
+  console.log("Getting current state from smart contract");
+  // const events = await tornado.getPastEvents("Deposit", {
+  //   fromBlock: 0,
+  //   toBlock: "latest",
+  // });
+  // const leaves = events
+  //   .sort((a, b) => a.returnValues.leafIndex - b.returnValues.leafIndex) // Sort events in chronological order
+  //   .map((e) => e.returnValues.commitment);
+
+  const { events, tree } = buildMerkleTree(blenderContract);
 
   // Find current commitment in the tree
   const depositEvent = events.find(
@@ -199,17 +193,40 @@ async function generateMerkleProof(deposit) {
 
   // Validate that our data is correct
   const root = tree.root();
-  const isValidRoot = await tornado.methods.isKnownRoot(toHex(root)).call();
-  const isSpent = await tornado.methods
-    .isSpent(toHex(deposit.nullifierHash))
-    .call();
+  const isValidRoot = await blender.isKnownRoot(toHex(root)).call();
+  const isSpent = await blender.isSpent(toHex(deposit.nullifierHash)).call();
   assert(isValidRoot === true, "Merkle tree is corrupted");
   assert(isSpent === false, "The note is already spent");
   assert(leafIndex >= 0, "The deposit is not found in the tree");
 
   // Compute merkle proof of our commitment
   const { pathElements, pathIndices } = tree.path(leafIndex);
+  console.log("generateMerkleProof ~ pathElements", pathElements);
+  console.log("generateMerkleProof ~ pathIndices", pathIndices);
+
   return { pathElements, pathIndices, root: tree.root() };
+}
+
+/**
+ * builds merkle tree
+ * @param {contract} blenderContract blender NFT Mixer contract
+ * @returns all the events from the block chain and new merkle tree
+ */
+async function buildMerkleTree({ blenderContract }) {
+  const filter = blenderContract.filters.NewCommitment();
+  const events = await blenderContract.queryFilter(filter, 0);
+  console.log("buildMerkleTree ~ events", events);
+
+  const leaves = events
+    .sort((a, b) => a.args.index - b.args.index)
+    .map((e) => toFixedHex(e.args.commitment));
+
+  const tree = new MerkleTree(MERKLE_TREE_HEIGHT, leaves, {
+    hashFunction: poseidonHash2,
+  });
+  console.log("buildMerkleTree ~ tree", tree);
+
+  return { evetnts: events, tree: tree };
 }
 
 /**
@@ -226,6 +243,8 @@ async function generateProof({
   relayerAddress = 0,
   fee = 0,
   refund = 0,
+  tokenAddr,
+  tokenId,
 }) {
   // Compute merkle proof of our commitment
   const { root, pathElements, pathIndices } = await generateMerkleProof(
@@ -237,10 +256,12 @@ async function generateProof({
     // Public snark inputs
     root: root,
     nullifierHash: deposit.nullifierHash,
-    recipient: bigInt(recipient),
-    relayer: bigInt(relayerAddress),
-    fee: bigInt(fee),
-    refund: bigInt(refund),
+    recipient: BigNumber.from(recipient),
+    relayer: BigNumber.from(relayerAddress),
+    fee: BigNumber.from(fee),
+    refund: BigNumber.from(refund),
+    tokenAddr: BigNumber.from(tokenAddr),
+    tokenId: BigNumber.from(tokenId),
 
     // Private snark inputs
     nullifier: deposit.nullifier,
@@ -248,6 +269,7 @@ async function generateProof({
     pathElements: pathElements,
     pathIndices: pathIndices,
   };
+  console.log("input", input);
 
   console.log("Generating SNARK proof");
   console.time("Proof time");
@@ -258,16 +280,21 @@ async function generateProof({
     proving_key
   );
   const { proof } = websnarkUtils.toSolidityInput(proofData);
+  console.log("proof", proof);
+
   console.timeEnd("Proof time");
 
   const args = [
     toHex(input.root),
     toHex(input.nullifierHash),
+    toHex(input.tokenAddr, 20),
+    toHex(input.tokenId),
     toHex(input.recipient, 20),
     toHex(input.relayer, 20),
     toHex(input.fee),
     toHex(input.refund),
   ];
+  console.log("args", args);
 
   return { proof, args };
 }
@@ -282,45 +309,45 @@ async function withdraw({
   currency,
   amount,
   recipient,
-  relayerURL,
+  relayerURL = "0",
   refund = "0",
 }) {
   if (currency === "eth" && refund !== "0") {
-    throw new Error(
-      "The ETH purchase is supposted to be 0 for ETH withdrawals"
-    );
+    throw new Error("The ETH purchase is supposed to be 0 for ETH withdrawals");
   }
   refund = toWei(refund);
   if (relayerURL) {
-    if (relayerURL.endsWith(".eth")) {
-      throw new Error(
-        "ENS name resolving is not supported. Please provide DNS name of the relayer. See instuctions in README.md"
-      );
-    }
-    const relayerStatus = await axios.get(relayerURL + "/status");
-    const { relayerAddress, netId, gasPrices, ethPrices, relayerServiceFee } =
-      relayerStatus.data;
-    assert(
-      netId === (await web3.eth.net.getId()) || netId === "*",
-      "This relay is for different network"
-    );
-    console.log("Relay address: ", relayerAddress);
+    // if (relayerURL.endsWith(".eth")) {
+    //   throw new Error(
+    //     "ENS name resolving is not supported. Please provide DNS name of the relayer. See instuctions in README.md"
+    //   );
+    // }
+    // const relayerStatus = await axios.get(relayerURL + "/status");
+    // const { relayerAddress, netId, gasPrices, ethPrices, relayerServiceFee } =
+    //   relayerStatus.data;
+    // assert(
+    //   netId === (await web3.eth.net.getId()) || netId === "*",
+    //   "This relay is for different network"
+    // );
+    // console.log("Relay address: ", relayerAddress);
 
-    const decimals = isLocalRPC
-      ? 18
-      : config.deployments[`netId${netId}`][currency].decimals;
-    const fee = calculateFee({
-      gasPrices,
-      currency,
-      amount,
-      refund,
-      ethPrices,
-      relayerServiceFee,
-      decimals,
-    });
-    if (fee.gt(fromDecimals({ amount, decimals }))) {
-      throw new Error("Too high refund");
-    }
+    // const decimals = isLocalRPC
+    //   ? 18
+    //   : config.deployments[`netId${netId}`][currency].decimals;
+    // const fee = calculateFee({
+    //   gasPrices,
+    //   currency,
+    //   amount,
+    //   refund,
+    //   ethPrices,
+    //   relayerServiceFee,
+    //   decimals,
+    // });
+    // if (fee.gt(fromDecimals({ amount, decimals }))) {
+    //   throw new Error("Too high refund");
+    // }
+    const relayerAddress = utils.computeAddress("0");
+    const fee = 0;
     const { proof, args } = await generateProof({
       deposit,
       recipient,
@@ -331,22 +358,25 @@ async function withdraw({
 
     console.log("Sending withdraw transaction through relay");
     try {
-      const relay = await axios.post(relayerURL + "/relay", {
-        contract: tornado._address,
-        proof,
-        args,
-      });
-      if (netId === 1 || netId === 42) {
-        console.log(
-          `Transaction submitted through the relay. View transaction on etherscan https://${getCurrentNetworkName()}etherscan.io/tx/${
-            relay.data.txHash
-          }`
-        );
-      } else {
-        console.log(
-          `Transaction submitted through the relay. The transaction hash is ${relay.data.txHash}`
-        );
-      }
+      // const relay = await axios.post(relayerURL + "/relay", {
+      //   contract: tornado._address,
+      //   proof,
+      //   args,
+      // });
+      // if (netId === 1 || netId === 42) {
+      //   console.log(
+      //     `Transaction submitted through the relay. View transaction on etherscan https://${getCurrentNetworkName()}etherscan.io/tx/${
+      //       relay.data.txHash
+      //     }`
+      //   );
+      // } else {
+      //   console.log(
+      //     `Transaction submitted through the relay. The transaction hash is ${relay.data.txHash}`
+      //   );
+      // }
+
+      // todo: set withdraw transacation
+      const relay = await blender.withdraw();
 
       const receipt = await waitForTxReceipt({ txHash: relay.data.txHash });
       console.log("Transaction mined in block", receipt.blockNumber);
@@ -362,7 +392,7 @@ async function withdraw({
     const { proof, args } = await generateProof({ deposit, recipient, refund });
 
     console.log("Submitting withdraw transaction");
-    await tornado.methods
+    await blender
       .withdraw(proof, ...args)
       .send({ from: senderAccount, value: refund.toString(), gas: 1e6 })
       .on("transactionHash", function (txHash) {
@@ -588,7 +618,7 @@ async function loadDepositData({ deposit }) {
 
     const { timestamp } = eventWhenHappened[0].returnValues;
     const txHash = eventWhenHappened[0].transactionHash;
-    const isSpent = await tornado.methods.isSpent(deposit.nullifierHex).call();
+    const isSpent = await blender.isSpent(deposit.nullifierHex).call();
     const receipt = await web3.eth.getTransactionReceipt(txHash);
 
     return {
