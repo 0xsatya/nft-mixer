@@ -35,7 +35,7 @@ async function main() {
     `circom ${buildPath}/${CIRCUIT}.circom --r1cs --wasm --sym --output ./${PATH}/build`
   );
 
-  logger.log("----------- compiling circuit --------")
+  logger.log("----------- compiling circuit --------");
   await exec(
     `circom2 ${buildPath}/${CIRCUIT}.circom --r1cs --wasm --sym --output ./${PATH}/build`
   );
