@@ -27,10 +27,12 @@ let isLocalRPC = false;
 /** Generate random number of specified byte length */
 const rbigint = (nbytes) =>
   snarkjs.bigInt.leBuff2int(crypto.randomBytes(nbytes));
+console.log("rbigint", rbigint);
 
 /** Compute pedersen hash */
 const pedersenHash = (data) =>
   circomlib.babyJub.unpackPoint(circomlib.pedersenHash.hash(data))[0];
+console.log("pedersenHash", pedersenHash);
 
 /** BigNumber to hex string of specified length */
 function toHex(number, length = 32) {
@@ -38,6 +40,7 @@ function toHex(number, length = 32) {
     number instanceof Buffer
       ? number.toString("hex")
       : bigInt(number).toString(16);
+  console.log("number to hex", "0x" + str.padStart(length * 2, "0"));
   return "0x" + str.padStart(length * 2, "0");
 }
 
@@ -65,16 +68,28 @@ async function printERC20Balance({ address, name, tokenAddress }) {
 /**
  * Create deposit object from secret and nullifier
  */
-function createDeposit({ nullifier, secret }) {
-  const deposit = { nullifier, secret };
+function createDeposit({ nullifier, secret, nftAddr, tokenId }) {
+  const deposit = { nullifier, secret, nftAddr, tokenId };
+  const nfr = { nullifier, nftAddr };
+  nfr.preimage = Buffer.concat([
+    nfr.nullifier.leInt2Buff(16),
+    nfr.nftAddr.leInt2Buff(16),
+  ]);
   deposit.preimage = Buffer.concat([
-    deposit.nullifier.leInt2Buff(31),
-    deposit.secret.leInt2Buff(31),
+    deposit.nullifier.leInt2Buff(16),
+    deposit.secret.leInt2Buff(16),
+    deposit.nftAddr.leInt2Buff(16),
+    deposit.tokenId.leInt2Buff(16),
   ]);
   deposit.commitment = pedersenHash(deposit.preimage);
   deposit.commitmentHex = toHex(deposit.commitment);
-  deposit.nullifierHash = pedersenHash(deposit.nullifier.leInt2Buff(31));
+  deposit.nullifierHash = pedersenHash(nfr.preimage);
   deposit.nullifierHex = toHex(deposit.nullifierHash);
+
+  console.log("createDeposit ~ deposit.commitment", deposit.commitment);
+  console.log("createDeposit ~ deposit.commitmentHex", deposit.commitmentHex);
+  console.log("createDeposit ~ deposit.nullifierHash", deposit.nullifierHash);
+  console.log("createDeposit ~ deposit.nullifierHex", deposit.nullifierHex);
   return deposit;
 }
 
@@ -83,21 +98,30 @@ function createDeposit({ nullifier, secret }) {
  * @param currency Сurrency
  * @param amount Deposit amount
  */
-async function deposit({ currency, amount }) {
+async function deposit({ currency, amount, nftAddr, tokenId }) {
   const deposit = createDeposit({
     nullifier: rbigint(31),
     secret: rbigint(31),
+    nftAddr: BigInt(nftAddr),
+    tokenId: BigInt(tokenId),
   });
-  const note = toHex(deposit.preimage, 62);
-  const noteString = `tornado-${currency}-${amount}-${netId}-${note}`;
+
+  console.log("deposit ~ deposit", deposit);
+
+  const note = toHex(deposit.preimage, 64);
+  const noteString = `blender-${nftAddr}-${tokenId}-${note}`;
+
   console.log(`Your note: ${noteString}`);
+
   if (currency === "eth") {
     await printETHBalance({ address: tornado._address, name: "Tornado" });
     await printETHBalance({ address: senderAccount, name: "Sender account" });
     const value = isLocalRPC
       ? ETH_AMOUNT
       : fromDecimals({ amount, decimals: 18 });
+
     console.log("Submitting deposit transaction");
+
     await tornado.methods
       .deposit(toHex(deposit.commitment))
       .send({ value, from: senderAccount, gas: 2e6 });
@@ -107,12 +131,15 @@ async function deposit({ currency, amount }) {
     // a token
     await printERC20Balance({ address: tornado._address, name: "Tornado" });
     await printERC20Balance({ address: senderAccount, name: "Sender account" });
+
     const decimals = isLocalRPC
       ? 18
       : config.deployments[`netId${netId}`][currency].decimals;
+
     const tokenAmount = isLocalRPC
       ? TOKEN_AMOUNT
       : fromDecimals({ amount, decimals });
+
     if (isLocalRPC) {
       console.log("Minting some test tokens to deposit");
       await erc20.methods
@@ -123,7 +150,9 @@ async function deposit({ currency, amount }) {
     const allowance = await erc20.methods
       .allowance(senderAccount, tornado._address)
       .call({ from: senderAccount });
+
     console.log("Current allowance is", fromWei(allowance));
+
     if (toBN(allowance).lt(toBN(tokenAmount))) {
       console.log("Approving tokens for deposit");
       await erc20.methods
@@ -132,9 +161,11 @@ async function deposit({ currency, amount }) {
     }
 
     console.log("Submitting deposit transaction");
+
     await tornado.methods
       .deposit(toHex(deposit.commitment))
       .send({ from: senderAccount, gas: 2e6 });
+
     await printERC20Balance({ address: tornado._address, name: "Tornado" });
     await printERC20Balance({ address: senderAccount, name: "Sender account" });
   }
