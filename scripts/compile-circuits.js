@@ -4,14 +4,14 @@ const download = require("download");
 const fs = require("fs");
 const logger = require("js-logger");
 // const rimraf = require("rimraf");
-const { zKey, wtns, groth16 } = require("snarkjs");
+const { zKey, wtns, groth16, r1cs } = require("snarkjs");
 const { config } = require("../package.json");
 
 logger.useDefaults();
 
 async function main() {
-  const buildPath = "./circuits/multiplier";
-  const CIRCUIT = "multiplier";
+  const buildPath = "./circuits/nft-mixer";
+  const CIRCUIT = "nftMixer";
   const PATH = `circuit-build-${CIRCUIT}`;
   const INPUT = `${CIRCUIT}-input`;
   const solidityVersion = config.solidity.version;
@@ -38,6 +38,17 @@ async function main() {
   logger.log("----------- compiling circuit --------")
   await exec(
     `circom2 ${buildPath}/${CIRCUIT}.circom --r1cs --wasm --sym --output ./${PATH}/build`
+  );
+
+  logger.log("exporting circuit to json format");
+  const circuitJson = await r1cs.exportJson(
+    `${PATH}/build/${CIRCUIT}.r1cs`,
+    logger
+  );
+  fs.writeFileSync(
+    `${PATH}/build/${CIRCUIT}.json`,
+    JSON.stringify(circuitJson),
+    "utf-8"
   );
 
   logger.log("-----------zKey-----------");
@@ -78,7 +89,7 @@ async function main() {
     `${buildPath}/${CIRCUIT}.wtns`
   );
 
-  logger.log("-----------proof-----------");
+  logger.log("-----------proof & publicSignals-----------");
   const { proof, publicSignals } = await groth16.prove(
     `${PATH}/keys/${CIRCUIT}_final.zkey`,
     `${buildPath}/${CIRCUIT}.wtns`,

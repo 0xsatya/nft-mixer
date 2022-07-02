@@ -1,22 +1,16 @@
-pragma circom 2.0.3;
+pragma circom 2.0.0;
 
-include "../node_modules/circomlib/circuits/poseidon.circom";
-// include "https://github.com/0xPARC/circom-secp256k1/blob/master/circuits/bigint.circom";
+/*This circuit template checks that c is the multiplication of a and b.*/  
 
-template multiplier2 () {
-    signal input a;
-    signal input b;
-    signal output c;
-    
-    c <== a * b;
+template Multiplier2 () {  
 
-    assert(a > 2);
-    
-    component hash = Poseidon(2);
-    hash.inputs[0] <== a;
-    hash.inputs[1] <== b;
+   // Declaration of signals.  
+   signal input a;  
+   signal input b;  
+   signal output c;  
 
-    // log(hash.out);
+   // Constraints.  
+   c <== a * b;  
 }
 
-component main { public [ a ] } = multiplier2();
+component main = Multiplier2();
