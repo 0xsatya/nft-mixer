@@ -2,7 +2,9 @@
 const crypto = require("crypto");
 const { ethers } = require("hardhat");
 const BigNumber = ethers.BigNumber;
-const { poseidon } = require("circomlib");
+const { poseidon } = require("circomlibjs");
+// const poseidon = buildPoseidonOpt;
+// console.log('--- typeof poseidon :', typeof buildPoseidonOpt);
 
 const poseidonHash = (items) => BigNumber.from(poseidon(items).toString());
 const poseidonHash2 = (a, b) => poseidonHash([a, b]);

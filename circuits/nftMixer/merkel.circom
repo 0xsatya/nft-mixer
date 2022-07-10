@@ -1,7 +1,7 @@
 pragma circom 2.0.3;
 
 //-------------Merkle Tree--------------
-include "circomlib/circuits/mimcsponge.circom";
+include "../../node_modules/circomlib/circuits/mimcsponge.circom";
 
 // Computes MiMC([left, right])
 template HashLeftRight() {

@@ -1,10 +1,10 @@
 pragma circom 2.0.3;
 
-include "../node_modules/circomlib/circuits/bitify.circom";
-include "../node_modules/circomlib/circuits/pedersen.circom";
+include "../../node_modules/circomlib/circuits/bitify.circom";
+include "../../node_modules/circomlib/circuits/pedersen.circom";
 
 //-------------Merkle Tree--------------
-include "../node_modules/circomlib/circuits/mimcsponge.circom";
+include "../../node_modules/circomlib/circuits/mimcsponge.circom";
 
 // Computes MiMC([left, right])
 template HashLeftRight() {
@@ -133,11 +133,13 @@ template Withdraw(levels) {
     refundSquare <== refund * refund;
 }
 
-component main {public [root , nullifierHash]} = Withdraw(1);
+component main {public [root , nullifierHash, tokenId, nftAddress]} = Withdraw(1);
 
 /* INPUT = {
     "root": "16296659098868975318610681305956664471851509760143234002578597065987613223531",
-    "nullifierHash": "11172816448033496386538185216595920505082224450690847824246062112016923332446",
+    "
+    -
+    ": "11172816448033496386538185216595920505082224450690847824246062112016923332446",
     "recipient": "222",
     "relayer": "333",
     "fee": "100",

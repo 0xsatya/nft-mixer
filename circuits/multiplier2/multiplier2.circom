@@ -8,6 +8,14 @@ template Multiplier2 () {
    signal input a;  
    signal input b;  
    signal output c;  
+   signal inva;
+   signal invb;
+
+   inva <-- 1/(a-1);
+   (a-1)*inva === 1;
+
+   invb <-- 1/(b-1);
+   (b-1)*invb === 1;    
 
    // Constraints.  
    c <== a * b;  

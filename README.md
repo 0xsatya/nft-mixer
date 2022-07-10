@@ -40,3 +40,22 @@ Then, copy the deployment address and paste it in to replace `DEPLOYED_CONTRACT_
 ```shell
 npx hardhat verify --network ropsten DEPLOYED_CONTRACT_ADDRESS "Hello, Hardhat!"
 ```
+
+TODO - NFT Escrow
+1. Contract:
+   1. Deposit Token
+   2. Transfer Ownership
+   3. Withdraw Token
+   4. Pause Contract
+2. Helper Functions
+   1. Check token owner
+   2. approve token transfer to NFT Mixer
+
+Pending:
+1. Run Tree Test
+2. Run Cli.js
+3. parse notestring should give complete nullifier, secret, nft address and token id
+
+
+Go through
+MerkleTreeWithHistory

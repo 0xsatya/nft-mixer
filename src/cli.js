@@ -57,7 +57,7 @@ async function printETHBalance({ address, name }) {
 
 /** Display ERC21 account balance */
 async function checkERC21Owner({ address, name, tokenAddress, tokenId }) {
-  // todo: check token ower;
+  // TODO: check token ower;
 }
 
 /**
@@ -68,7 +68,7 @@ function createDeposit({ nullifier, secret, tokenAddr, tokenId }) {
   const nfr = { nullifier, tokenAddr };
   nfr.preimage = Buffer.concat([
     nfr.nullifier.leInt2Buff(16),
-    nfr.tokenAddr.leInt2Buff(16),
+    nfr.tokenAddr.leInt2Buff(16),//add-xyz, token
   ]);
   deposit.preimage = Buffer.concat([
     deposit.nullifier.leInt2Buff(16),
