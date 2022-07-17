@@ -15,13 +15,16 @@ async function main() {
   // await hre.run('compile');
 
   // We get the contract to deploy
-  // const Greeter = await hre.ethers.getContractFactory(Hasher);
-  const Greeter = await hre.ethers.ContractFactory(Hasher.abi, Hasher.bytecode);
-  const greeter = await Greeter.deploy();
+  const HasherContract = await hre.ethers.getContractFactory(Hasher);
+  // const HasherContract = await hre.ethers.ContractFactory(
+  //   Hasher.abi,
+  //   Hasher.bytecode
+  // );
+  const hasher = await HasherContract.deploy();
 
-  await greeter.deployed();
+  await hasher.deployed();
 
-  console.log("Greeter deployed to:", greeter.address);
+  console.log("Hasher deployed to:", hasher.address);
 }
 
 // We recommend this pattern to be able to use async/await everywhere

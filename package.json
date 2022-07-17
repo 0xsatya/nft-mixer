@@ -7,8 +7,8 @@
     "start": "hardhat node",
     "compile": "hardhat compile && yarn compile:hasher",
     "compile:hasher": "hardhat hasher",
-    "build-circuit": "hardhat run scripts/compile-circuits.js",
-    "deploy-contract": "hardhat deploy:contract",
+    "build:circuit": "hardhat run scripts/compile-circuits.js",
+    "deploy:contract": "hardhat deploy:contract",
     "test": "hardhat test",
     "test:report-gas": "REPORT_GAS=true hardhat test",
     "test:coverage": "hardhat coverage"

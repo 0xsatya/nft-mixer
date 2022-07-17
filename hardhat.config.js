@@ -28,7 +28,15 @@ task("hasher", "Compile Poseidon hasher", () => {
  * @type import('hardhat/config').HardhatUserConfig
  */
 module.exports = {
-  solidity: "0.8.4",
+  solidity: {
+    version: "0.8.4",
+    settings: {
+      optimizer: {
+        runs: 200,
+        enabled: true,
+      },
+    },
+  },
   circom: {
     // (optional) Base path for input files, defaults to `./circuits/`
     inputBasePath: "./circuits",

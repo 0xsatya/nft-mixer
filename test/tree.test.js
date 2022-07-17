@@ -1,13 +1,11 @@
+/* eslint-disable camelcase */
 const hre = require("hardhat");
 const { ethers, waffle } = hre;
 const { loadFixture } = waffle;
 const { expect } = require("chai");
-const { poseidon_gencontract } = require("circomlibjs");
+const { poseidon_gencontract, poseidon } = require("circomlibjs");
 
 const { poseidonHash2, toFixedHex } = require("../src/utils");
-const { poseidon } = require("circomlibjs");
-const LeftLeaft = 0;
-const RightLeaf = 0;
 const MERKLE_TREE_HEIGHT = 5;
 const ZERO_VALUE =
   "1370249852395389490700185797340442620366735189419093909046557908847258978065"; // = keccak256("blender") % FIELD_SIZE
@@ -22,11 +20,6 @@ describe("MerkleTreeWithHistory", function () {
     const bytecode = poseidon_gencontract.createCode(nInputs);
     const abiJson = poseidon_gencontract.generateABI(nInputs);
     const abi = new ethers.utils.Interface(abiJson);
-    // console.log(
-    //   "🚀 ~ file: tree.test.js ~ line 20 ~ getPoseidonFactory ~ abi",
-    //   abi
-    // );
-
     return new ethers.ContractFactory(abi, bytecode);
   }
 
@@ -46,10 +39,10 @@ describe("MerkleTreeWithHistory", function () {
 
   async function fixture() {
     // TODO: check later to use compileHasher to generate hasher artifact
-    // require("../scripts/compileHasher");
-    // const hasher = await deploy("Hasher");
-    const [signer] = await ethers.getSigners();
-    const hasher = await getPoseidonFactory(2).connect(signer).deploy();
+    require("../scripts/compileHasher");
+    const hasher = await deploy("Hasher");
+    // const [signer] = await ethers.getSigners();
+    // const hasher = await getPoseidonFactory(2).connect(signer).deploy();
     // console.log("🚀 ~ file: tree.test.js ~ line 41 ~ fixture ~ hasher", hasher);
 
     // const hasher = await hasherContractFactory.deploy();
@@ -76,16 +69,11 @@ describe("MerkleTreeWithHistory", function () {
   describe("#constructor", () => {
     it("should correctly hash 2 leaves", async () => {
       const { hasher, merkleTreeWithHistory } = await loadFixture(fixture);
-      // console.log(
-      //   "🚀 ~ file: tree.test.js ~ line 73 ~ it.only ~ hasher",
-      //   hasher
-      // );
-      // console.log(hasher)
       const hash0 = await merkleTreeWithHistory.hashLeftRight(
         toFixedHex(123),
         toFixedHex(456)
       );
-      console.log("🚀 ~ file: tree.test.js ~ line 72 ~ it.only ~ hash0", hash0);
+      console.log("🚀 ~ hash0 : from merkelTreeWithHistory contract:", hash0);
 
       // TODO: check hasher contract frontend poseidon fun
       // const hash1 = await hasher.poseidon([toFixedHex(123), toFixedHex(456)]);
@@ -93,28 +81,18 @@ describe("MerkleTreeWithHistory", function () {
       // console.log(poseidon([123, 456]));
 
       const hash2 = await poseidonHash2(123, 456);
-      console.log("🚀 ~ file: tree.test.js ~ line 82 ~ it.only ~ hash2", hash2);
+      console.log("🚀 ~ hash2: from poseidon circomlibjs:", toFixedHex(hash2));
       expect(hash0).to.equal(hash2);
     });
 
     it("should initialize", async () => {
       const { merkleTreeWithHistory } = await loadFixture(fixture);
       const zeroValue = await merkleTreeWithHistory.ZERO_VALUE();
-      console.log(
-        "🚀 ~ file: tree.test.js ~ line 100 ~ it ~ zeroValue",
-        zeroValue,
-        zeroValue.toHexString()
-      );
+      console.log("🚀 zeroValue", zeroValue.toHexString());
       const firstSubtree = await merkleTreeWithHistory.filledSubtrees(0);
-      console.log(
-        "🚀 ~ file: tree.test.js ~ line 102 ~ it ~ firstSubtree",
-        firstSubtree
-      );
+      console.log("🚀 firstSubtree", firstSubtree);
       const firstZero = await merkleTreeWithHistory.zeros(0);
-      console.log(
-        "🚀 ~ file: tree.test.js ~ line 104 ~ it ~ firstZero",
-        firstZero
-      );
+      console.log("🚀 firstZero", firstZero);
       expect(firstSubtree).to.be.equal(zeroValue);
       expect(firstZero).to.be.equal(zeroValue);
     });
@@ -125,7 +103,7 @@ describe("MerkleTreeWithHistory", function () {
       console.log("🚀 ~ contractRoot", contractRoot);
 
       const tree = getNewTree();
-      console.log("JS tree", tree);
+      // console.log("JS tree", tree);
       console.log("JS tree root:", tree.root.toHexString());
 
       expect(tree.root.toHexString()).to.equal(contractRoot);

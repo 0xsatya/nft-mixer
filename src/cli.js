@@ -27,6 +27,8 @@ let MERKLE_TREE_HEIGHT, ETH_AMOUNT, TOKEN_AMOUNT, PRIVATE_KEY;
 /** Whether we are in a browser or node.js */
 const inBrowser = typeof window !== "undefined";
 let isLocalRPC = false;
+const circutPath = __dirname + "/../circuits-build-nftMixer/output/";
+const contractArtifactPath = __dirname + "/../artifacts/contracts/";
 
 /** Generate random number of specified byte length */
 const rbigint = (nbytes) => BigInt.leBuff2int(crypto.randomBytes(nbytes));
@@ -68,7 +70,7 @@ function createDeposit({ nullifier, secret, tokenAddr, tokenId }) {
   const nfr = { nullifier, tokenAddr };
   nfr.preimage = Buffer.concat([
     nfr.nullifier.leInt2Buff(16),
-    nfr.tokenAddr.leInt2Buff(16),//add-xyz, token
+    nfr.tokenAddr.leInt2Buff(16), //add-xyz, token
   ]);
   deposit.preimage = Buffer.concat([
     deposit.nullifier.leInt2Buff(16),
@@ -666,12 +668,18 @@ async function loadWithdrawalData({ amount, currency, deposit }) {
 /**
  * Init web3, contracts, and snark
  */
-async function init({ rpc, noteNetId, currency = "dai", amount = "100" }) {
-  let contractJson,
-    erc20ContractJson,
-    erc20tornadoJson,
-    tornadoAddress,
-    tokenAddress;
+async function init({
+  rpc,
+  noteNetId,
+  nftAdd = ethers.constants.AddressZero,
+  tokenId = 1,
+}) {
+  let blenderJson, //contractJson
+    erc721ContractJson, //erc20ContractJson,
+    erc1155ContractJson, // erc20tornadoJson,
+    blenderAddress; // tornadoAddress,
+  // nftAddress // tokenAddress;
+  // tokenId
   // TODO do we need this? should it work in browser really?
   if (inBrowser) {
     // Initialize using injected web3 (Metamask)
@@ -692,30 +700,26 @@ async function init({ rpc, noteNetId, currency = "dai", amount = "100" }) {
     senderAccount = (await web3.eth.getAccounts())[0];
   } else {
     // Initialize from local node
-    web3 = new Web3(rpc, null, { transactionConfirmationBlocks: 1 });
-    contractJson = require(__dirname + "/../build/contracts/ETHTornado.json");
-    circuit = require(__dirname + "/../build/circuits/withdraw.json");
-    proving_key = fs.readFileSync(
-      __dirname + "/../build/circuits/withdraw_proving_key.bin"
-    ).buffer;
+    // web3 = new Web3(rpc, null, { transactionConfirmationBlocks: 1 });
+    blenderJson = require(contractArtifactPath + "NFTBlender.json");
+    circuit = require(circutPath + "nftMixer.json");
+    proving_key = fs.readFileSync(circutPath + "nftMixer_final.zkey").buffer;
     MERKLE_TREE_HEIGHT = process.env.MERKLE_TREE_HEIGHT || 20;
     ETH_AMOUNT = process.env.ETH_AMOUNT;
     TOKEN_AMOUNT = process.env.TOKEN_AMOUNT;
     PRIVATE_KEY = process.env.PRIVATE_KEY;
     if (PRIVATE_KEY) {
-      const account = web3.eth.accounts.privateKeyToAccount("0x" + PRIVATE_KEY);
-      web3.eth.accounts.wallet.add("0x" + PRIVATE_KEY);
-      web3.eth.defaultAccount = account.address;
+      const account = ethers.utils.privateKeyToAccount("0x" + PRIVATE_KEY);
+      // web3.eth.accounts.wallet.add("0x" + PRIVATE_KEY);
+      // web3.eth.defaultAccount = account.address;
       senderAccount = account.address;
     } else {
       console.log(
         "Warning! PRIVATE_KEY not found. Please provide PRIVATE_KEY in .env file if you deposit"
       );
     }
-    erc20ContractJson = require(__dirname +
-      "/../build/contracts/ERC20Mock.json");
-    erc20tornadoJson = require(__dirname +
-      "/../build/contracts/ERC20Tornado.json");
+    erc721ContractJson = require(contractArtifactPath + "ERC721Mock.json");
+    erc1155ContractJson = require(contractArtifactPath + "ERC1155Mock.json");
   }
   // groth16 initialises a lot of Promises that will never be resolved, that's why we need to use process.exit to terminate the CLI
   groth16 = await buildGroth16();
@@ -781,14 +785,12 @@ async function main() {
       )
       .option("-R, --relayer <URL>", "Withdraw via relayer");
     program
-      .command("deposit <currency> <amount>")
-      .description(
-        "Submit a deposit of specified currency and amount from default eth account and return the resulting note. The currency is one of (ETH|DAI|cDAI|USDC|cUSDC|USDT). The amount depends on currency, see config.js file or visit https://tornado.cash."
-      )
-      .action(async (currency, amount) => {
-        currency = currency.toLowerCase();
-        await init({ rpc: program.rpc, currency, amount });
-        await deposit({ currency, amount });
+      .command("deposit <NftAddress> <tokenId>")
+      .description("Submit a deposit of NFt token from specified Nft Contract")
+      .action(async (nftAdd, tokenId) => {
+        nftAdd = ethers.utils.getAddress(nftAdd);
+        await init({ rpc: program.rpc, nftAdd, tokenId });
+        await deposit({ nftAdd, tokenId });
       });
     program
       .command("withdraw <note> <recipient> [ETH_purchase]")
