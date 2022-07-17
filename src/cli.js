@@ -6,37 +6,67 @@ const { ethers } = require("hardhat");
 const { BigNumber } = ethers;
 const { utils } = ethers;
 const fs = require("fs");
+const path = require("path");
 const axios = require("axios");
 const assert = require("assert");
 const snarkjs = require("snarkjs");
+const bigIntUtils = require("ffjavascript").utils;
+
 const crypto = require("crypto");
-const circomlib = require("circomlib");
+const circomlibjs = require("circomlibjs");
 const bigInt = snarkjs.bigInt;
 const MerkleTree = require("fixed-merkle-tree");
-const Web3 = require("web3");
-const buildGroth16 = require("snarkjs/src/groth16");
+// const Web3 = require("web3");
+const { groth16 } = require("snarkjs");
 const websnarkUtils = require("wasmsnark/src/utils");
 const { toWei, fromWei, toBN, BN } = require("web3-utils");
-const config = require("./config");
+// const config = require("./config");
 const program = require("commander");
-const { toFixedHex, poseidonHash2 } = require("./utils");
+const {
+  toFixedHex,
+  poseidonHash2,
+  deployContract,
+  contractAt,
+  getSignerFromAddress,
+} = require("./utils");
 
-let web3, tornado, circuit, proving_key, groth16, erc20, senderAccount, netId;
+let provider,
+  chainId,
+  web3,
+  blender,
+  circuit,
+  provingKey,
+  ERC721Mock,
+  ERC1155Mock,
+  senderAccount,
+  netId,
+  isERC721;
+let tokenId = 1;
 let MERKLE_TREE_HEIGHT, ETH_AMOUNT, TOKEN_AMOUNT, PRIVATE_KEY;
+
+MERKLE_TREE_HEIGHT = process.env.MERKLE_TREE_HEIGHT || 20;
 
 /** Whether we are in a browser or node.js */
 const inBrowser = typeof window !== "undefined";
 let isLocalRPC = false;
-const circutPath = __dirname + "/../circuits-build-nftMixer/output/";
-const contractArtifactPath = __dirname + "/../artifacts/contracts/";
+const circutPath = path.join(__dirname, "/../circuit-build-nftMixer/output/");
+const contractArtifactPath = path.join(__dirname, "/../artifacts/contracts/");
 
 /** Generate random number of specified byte length */
-const rbigint = (nbytes) => BigInt.leBuff2int(crypto.randomBytes(nbytes));
+const rbigint = (nbytes) => bigIntUtils.leBuff2int(crypto.randomBytes(nbytes));
 console.log("rbigint", rbigint);
 
 /** Compute pedersen hash */
-const pedersenHash = (data) =>
-  circomlib.babyJub.unpackPoint(circomlib.pedersenHash.hash(data))[0];
+const pedersenHash = (data) => {
+  console.log("🚀 ~ data", data);
+  console.log(
+    "🚀 ~ circomlibjs.pedersenHash.hash(data)",
+    circomlibjs.pedersenHash.hash(data)
+  );
+  return circomlibjs.babyjub.unpackPoint(
+    circomlibjs.pedersenHash.hash(data)
+  )[0];
+};
 console.log("pedersenHash", pedersenHash);
 
 /** BigNumber to hex string of specified length */
@@ -62,21 +92,88 @@ async function checkERC21Owner({ address, name, tokenAddress, tokenId }) {
   // TODO: check token ower;
 }
 
+async function setupAccount() {
+  console.log("-------Settingup Account from the private key-------");
+  provider = new ethers.getDefaultProvider();
+  chainId = (await provider.getNetwork()).chainId;
+  console.log("🚀 ~ chainId", chainId);
+  PRIVATE_KEY = process.env.PRIVATE_KEY;
+  if (PRIVATE_KEY) {
+    // senderAccount = new ethers.Wallet(PRIVATE_KEY, provider);
+    [senderAccount] = await ethers.getSigners();
+    console.log("🚀 ~ senderAccount", senderAccount.address);
+  } else {
+    console.log(
+      "Warning! PRIVATE_KEY not found. Please provide PRIVATE_KEY in .env file if you deposit"
+    );
+  }
+}
+
+async function deployBlender() {
+  require("../scripts/compileHasher");
+  require("../scripts/compileHasher3");
+  const hasher2 = await deployContract("Hasher");
+  console.log("🚀 ~ hasher2", hasher2.address);
+  const hasher3 = await deployContract("Hasher3");
+  console.log("🚀 ~ hasher3", hasher3.address);
+
+  const verifier = await deployContract("Verifier");
+  console.log("🚀 ~ verifier", verifier.address);
+  blender = await deployContract("NFTBlender", [
+    verifier.address,
+    hasher2.address,
+    hasher3.address,
+    MERKLE_TREE_HEIGHT,
+  ]);
+  console.log("🚀 ~ blender", blender.address);
+}
+
+async function setupTestToken() {
+  console.log("-----Deploying Mock NFT Contracts-----");
+  ERC721Mock = await deployContract("ERC721Mock", ["Mock721", "M721"]);
+  ERC1155Mock = await deployContract("ERC1155Mock", [
+    "https://token-cdn-domain/",
+  ]);
+  console.log("🚀 ~ ERC721Mock", ERC721Mock.address);
+  console.log("🚀 ~ ERC1155Mock", ERC1155Mock.address);
+
+  console.log("-----Miniting a Test Token to sender account-----");
+  await (
+    await ERC721Mock.connect(senderAccount).mint(senderAccount.address, tokenId)
+  ).wait();
+
+  console.log("-----Approving Token To Blender Contract-----");
+  await (
+    await ERC721Mock.connect(senderAccount).approve(blender.address, tokenId)
+  ).wait();
+  console.log("---- setupToken Successful -----");
+}
+
 /**
  * Create deposit object from secret and nullifier
  */
 function createDeposit({ nullifier, secret, tokenAddr, tokenId }) {
   const deposit = { nullifier, secret, tokenAddr, tokenId };
-  const nfr = { nullifier, tokenAddr };
+  console.log("🚀 ~ deposit", deposit);
+  const nfr = { nullifier, tokenAddr, tokenId };
+  console.log(
+    "🚀 ~ bigIntUtils.leInt2Buff(nfr.nullifier, 16),",
+    bigIntUtils.leInt2Buff(nfr.nullifier, 31),
+    bigIntUtils.leInt2Buff(nfr.tokenAddr, 31),
+    bigIntUtils.leInt2Buff(nfr.tokenId, 31),
+    bigIntUtils.leInt2Buff(deposit.secret, 31)
+  );
+
   nfr.preimage = Buffer.concat([
-    nfr.nullifier.leInt2Buff(16),
-    nfr.tokenAddr.leInt2Buff(16), //add-xyz, token
+    bigIntUtils.leInt2Buff(nfr.nullifier, 31),
+    bigIntUtils.leInt2Buff(nfr.tokenAddr, 31),
+    bigIntUtils.leInt2Buff(nfr.tokenId, 31),
   ]);
   deposit.preimage = Buffer.concat([
-    deposit.nullifier.leInt2Buff(16),
-    deposit.secret.leInt2Buff(16),
-    deposit.tokenAddr.leInt2Buff(16),
-    deposit.tokenId.leInt2Buff(16),
+    bigIntUtils.leInt2Buff(deposit.nullifier, 31),
+    bigIntUtils.leInt2Buff(deposit.secret, 31),
+    bigIntUtils.leInt2Buff(deposit.tokenAddr, 31),
+    bigIntUtils.leInt2Buff(deposit.tokenId, 31),
   ]);
   deposit.commitment = pedersenHash(deposit.preimage);
   deposit.commitmentHex = toHex(deposit.commitment);
@@ -96,75 +193,91 @@ function createDeposit({ nullifier, secret, tokenAddr, tokenId }) {
  * @param amount Deposit amount
  */
 async function deposit({
-  currency,
-  amount,
-  tokenAddr,
+  // currency,
+  // amount,
+  nftAdd,
   tokenId,
   currNftOwnerAddr,
 }) {
   const deposit = createDeposit({
     nullifier: rbigint(31),
     secret: rbigint(31),
-    tokenAddr: BigInt(tokenAddr),
+    tokenAddr: BigInt(nftAdd),
     tokenId: BigInt(tokenId),
   });
 
   console.log("deposit ~ deposit", deposit);
 
-  const note = toHex(deposit.preimage, 64);
-  const noteString = `blender-${tokenAddr}-${tokenId}-${note}`;
+  const note = toHex(deposit.preimage, 124);
+  console.log("🚀 ~ note", note);
+  const noteString = `blender-${nftAdd}-${tokenId}-${note}`;
 
   console.log(`Your note: ${noteString}`);
 
-  if (currency === "eth") {
-    // await printETHBalance({ address: tornado._address, name: "Tornado" });
-    // await printETHBalance({ address: senderAccount, name: "Sender account" });
-    // const value = isLocalRPC
-    //   ? ETH_AMOUNT
-    //   : fromDecimals({ amount, decimals: 18 });
-    // console.log("Submitting deposit transaction");
-    // await blender
-    //   .deposit(toHex(deposit.commitment))
-    //   .send({ value, from: senderAccount, gas: 2e6 });
-    // await printETHBalance({ address: tornado._address, name: "Tornado" });
-    // await printETHBalance({ address: senderAccount, name: "Sender account" });
-  } else {
-    // a token
-    // todo: check token onwer;
-    // todo: approve token transfer to nftMixer;
-    // todo: send transaction to nifMixer;
-    // await printERC20Balance({ address: tornado._address, name: "Tornado" });
-    // await printERC20Balance({ address: senderAccount, name: "Sender account" });
-    // const decimals = isLocalRPC
-    //   ? 18
-    //   : config.deployments[`netId${netId}`][currency].decimals;
-    // const tokenAmount = isLocalRPC
-    //   ? TOKEN_AMOUNT
-    //   : fromDecimals({ amount, decimals });
-    // if (isLocalRPC) {
-    //   console.log("Minting some test tokens to deposit");
-    //   await erc20.methods
-    //     .mint(senderAccount, tokenAmount)
-    //     .send({ from: senderAccount, gas: 2e6 });
-    // }
-    // const allowance = await erc20.methods
-    //   .allowance(senderAccount, tornado._address)
-    //   .call({ from: senderAccount });
-    // console.log("Current allowance is", fromWei(allowance));
-    // if (toBN(allowance).lt(toBN(tokenAmount))) {
-    //   console.log("Approving tokens for deposit");
-    //   await erc20.methods
-    //     .approve(tornado._address, tokenAmount)
-    //     .send({ from: senderAccount, gas: 1e6 });
-    // }
-    // console.log("Submitting deposit transaction");
-    // await blender
-    //   .deposit(toHex(deposit.commitment))
-    //   .send({ from: senderAccount, gas: 2e6 });
-    // await printERC20Balance({ address: tornado._address, name: "Tornado" });
-    // await printERC20Balance({ address: senderAccount, name: "Sender account" });
-  }
-
+  // if (currency === "eth") {
+  // await printETHBalance({ address: tornado._address, name: "Tornado" });
+  // await printETHBalance({ address: senderAccount, name: "Sender account" });
+  // const value = isLocalRPC
+  //   ? ETH_AMOUNT
+  //   : fromDecimals({ amount, decimals: 18 });
+  // console.log("Submitting deposit transaction");
+  // await blender
+  //   .deposit(toHex(deposit.commitment))
+  //   .send({ value, from: senderAccount, gas: 2e6 });
+  // await printETHBalance({ address: tornado._address, name: "Tornado" });
+  // await printETHBalance({ address: senderAccount, name: "Sender account" });
+  // } else {
+  // a token
+  // todo: check token onwer;
+  // todo: approve token transfer to nftMixer;
+  // todo: send transaction to nifMixer;
+  // await printERC20Balance({ address: tornado._address, name: "Tornado" });
+  // await printERC20Balance({ address: senderAccount, name: "Sender account" });
+  // const decimals = isLocalRPC
+  //   ? 18
+  //   : config.deployments[`netId${netId}`][currency].decimals;
+  // const tokenAmount = isLocalRPC
+  //   ? TOKEN_AMOUNT
+  //   : fromDecimals({ amount, decimals });
+  // if (isLocalRPC) {
+  //   console.log("Minting some test tokens to deposit");
+  //   await erc20.methods
+  //     .mint(senderAccount, tokenAmount)
+  //     .send({ from: senderAccount, gas: 2e6 });
+  // }
+  // const allowance = await erc20.methods
+  //   .allowance(senderAccount, tornado._address)
+  //   .call({ from: senderAccount });
+  // console.log("Current allowance is", fromWei(allowance));
+  // if (toBN(allowance).lt(toBN(tokenAmount))) {
+  //   console.log("Approving tokens for deposit");
+  //   await erc20.methods
+  //     .approve(tornado._address, tokenAmount)
+  //     .send({ from: senderAccount, gas: 1e6 });
+  // }
+  // console.log("Submitting deposit transaction");
+  // await blender
+  //   .deposit(toHex(deposit.commitment))
+  //   .send({ from: senderAccount, gas: 2e6 });
+  // await printERC20Balance({ address: tornado._address, name: "Tornado" });
+  // await printERC20Balance({ address: senderAccount, name: "Sender account" });
+  // }
+  console.log("Submitting deposit transaction");
+  const tx = await blender
+    .connect(senderAccount)
+    .depositNft(
+      toHex(deposit.commitment),
+      nftAdd,
+      tokenId,
+      ethers.utils.parseEther("1"),
+      true
+    );
+  let res = await tx.wait();
+  console.log("🚀 ~ tx", tx);
+  console.log("🚀 ~ res", res, res.blockNumber);
+  // console.log("--- Filtering Deposit data ---");
+  // let depositData = await loadDepositData(note);
+  // console.log("🚀 ~ depositData", depositData);
   return noteString;
 }
 
@@ -607,27 +720,35 @@ function parseNote(noteString) {
 
 async function loadDepositData({ deposit }) {
   try {
-    const eventWhenHappened = await tornado.getPastEvents("Deposit", {
-      filter: {
-        commitment: deposit.commitmentHex,
-      },
-      fromBlock: 0,
-      toBlock: "latest",
-    });
+    // const eventWhenHappened = await blender.getPastEvents("Deposit", {
+    //   filter: {
+    //     commitment: deposit.commitmentHex,
+    //   },
+    //   fromBlock: 0,
+    //   toBlock: "latest",
+    // });
+    const filter = blender.filters.NFTDeposited();
+    console.log("🚀 ~ filter", filter);
+    const fromBlock = await ethers.provider.getBlockNumber();
+    console.log("🚀 ~ fromBlock", fromBlock);
+
+    const eventWhenHappened = await blender.queryFilter(filter, 0, fromBlock);
+    console.log("🚀 ~ eventWhenHappened", eventWhenHappened);
+
     if (eventWhenHappened.length === 0) {
       throw new Error("There is no related deposit, the note is invalid");
     }
 
-    const { timestamp } = eventWhenHappened[0].returnValues;
+    const { timestamp } = eventWhenHappened[0].args;
     const txHash = eventWhenHappened[0].transactionHash;
     const isSpent = await blender.isSpent(deposit.nullifierHex).call();
-    const receipt = await web3.eth.getTransactionReceipt(txHash);
+    // const receipt = await web3.eth.getTransactionReceipt(txHash);
 
     return {
       timestamp,
       txHash,
       isSpent,
-      from: receipt.from,
+      // from: receipt.from,
       commitment: deposit.commitmentHex,
     };
   } catch (e) {
@@ -668,14 +789,9 @@ async function loadWithdrawalData({ amount, currency, deposit }) {
 /**
  * Init web3, contracts, and snark
  */
-async function init({
-  rpc,
-  noteNetId,
-  nftAdd = ethers.constants.AddressZero,
-  tokenId = 1,
-}) {
-  let blenderJson, //contractJson
-    erc721ContractJson, //erc20ContractJson,
+async function init({ rpc, noteNetId, nftAdd, tokenId, isERC721 }) {
+  let blenderJson, // contractJson
+    erc721ContractJson, // erc20ContractJson,
     erc1155ContractJson, // erc20tornadoJson,
     blenderAddress; // tornadoAddress,
   // nftAddress // tokenAddress;
@@ -691,7 +807,7 @@ async function init({
       await fetch("build/contracts/ETHTornado.json")
     ).json();
     circuit = await (await fetch("build/circuits/withdraw.json")).json();
-    proving_key = await (
+    provingKey = await (
       await fetch("build/circuits/withdraw_proving_key.bin")
     ).arrayBuffer();
     MERKLE_TREE_HEIGHT = 20;
@@ -701,64 +817,93 @@ async function init({
   } else {
     // Initialize from local node
     // web3 = new Web3(rpc, null, { transactionConfirmationBlocks: 1 });
-    blenderJson = require(contractArtifactPath + "NFTBlender.json");
+    // blenderJson = require(contractArtifactPath +
+    //   "NFTBlender.sol/NFTBlender.json");
+    console.log("🚀 ~ circutPath", circutPath);
     circuit = require(circutPath + "nftMixer.json");
-    proving_key = fs.readFileSync(circutPath + "nftMixer_final.zkey").buffer;
-    MERKLE_TREE_HEIGHT = process.env.MERKLE_TREE_HEIGHT || 20;
-    ETH_AMOUNT = process.env.ETH_AMOUNT;
-    TOKEN_AMOUNT = process.env.TOKEN_AMOUNT;
-    PRIVATE_KEY = process.env.PRIVATE_KEY;
-    if (PRIVATE_KEY) {
-      const account = ethers.utils.privateKeyToAccount("0x" + PRIVATE_KEY);
-      // web3.eth.accounts.wallet.add("0x" + PRIVATE_KEY);
-      // web3.eth.defaultAccount = account.address;
-      senderAccount = account.address;
-    } else {
-      console.log(
-        "Warning! PRIVATE_KEY not found. Please provide PRIVATE_KEY in .env file if you deposit"
-      );
-    }
-    erc721ContractJson = require(contractArtifactPath + "ERC721Mock.json");
-    erc1155ContractJson = require(contractArtifactPath + "ERC1155Mock.json");
+    provingKey = fs.readFileSync(circutPath + "nftMixer_final.zkey").buffer;
+    // MERKLE_TREE_HEIGHT = process.env.MERKLE_TREE_HEIGHT || 20;
+    // ETH_AMOUNT = process.env.ETH_AMOUNT;
+    // TOKEN_AMOUNT = process.env.TOKEN_AMOUNT;
+    // PRIVATE_KEY = process.env.PRIVATE_KEY;
+    // if (PRIVATE_KEY) {
+    //   senderAccount = ethers.utils.privateKeyToAccount("0x" + PRIVATE_KEY);
+    //   // web3.eth.accounts.wallet.add("0x" + PRIVATE_KEY);
+    //   // web3.eth.defaultAccount = account.address;
+    //   // senderAccount = account.address;
+    // } else {
+    //   console.log(
+    //     "Warning! PRIVATE_KEY not found. Please provide PRIVATE_KEY in .env file if you deposit"
+    //   );
+    // }
+    // erc721ContractJson = require(contractArtifactPath +
+    //   "Mocks/ERC721Mock.sol/ERC721Mock.json");
+    // erc1155ContractJson = require(contractArtifactPath +
+    //   "Mocks/ERC1155Mock.sol/ERC1155Mock.json");
   }
   // groth16 initialises a lot of Promises that will never be resolved, that's why we need to use process.exit to terminate the CLI
-  groth16 = await buildGroth16();
-  netId = await web3.eth.net.getId();
-  if (noteNetId && Number(noteNetId) !== netId) {
-    throw new Error(
-      "This note is for a different network. Specify the --rpc option explicitly"
-    );
-  }
-  isLocalRPC = netId > 42;
+  // groth16 = await buildGroth16();
+  // netId = await ethers.utils.getId();
+  // console.log("🚀 ~ netId", netId);
+  // if (noteNetId && Number(noteNetId) !== netId) {
+  //   throw new Error(
+  //     "This note is for a different network. Specify the --rpc option explicitly"
+  //   );
+  // }
+  // isLocalRPC = netId > 42;
 
-  if (isLocalRPC) {
-    tornadoAddress =
-      currency === "eth"
-        ? contractJson.networks[netId].address
-        : erc20tornadoJson.networks[netId].address;
-    tokenAddress =
-      currency !== "eth" ? erc20ContractJson.networks[netId].address : null;
-    senderAccount = (await web3.eth.getAccounts())[0];
-  } else {
-    try {
-      tornadoAddress =
-        config.deployments[`netId${netId}`][currency].instanceAddress[amount];
-      if (!tornadoAddress) {
-        throw new Error();
-      }
-      tokenAddress = config.deployments[`netId${netId}`][currency].tokenAddress;
-    } catch (e) {
-      console.error(
-        "There is no such tornado instance, check the currency and amount you provide"
-      );
-      process.exit(1);
-    }
-  }
-  tornado = new web3.eth.Contract(contractJson.abi, tornadoAddress);
-  erc20 =
-    currency !== "eth"
-      ? new web3.eth.Contract(erc20ContractJson.abi, tokenAddress)
-      : {};
+  // if (isLocalRPC) {
+  //   blenderAddress = blenderJson.networks[netId].address;
+
+  // tornadoAddress =
+  //   currency === "eth"
+  //     ? contractJson.networks[netId].address
+  //     : erc20tornadoJson.networks[netId].address;
+  // tokenAddress =
+  //   currency !== "eth" ? erc20ContractJson.networks[netId].address : null;
+  // senderAccount = (await web3.eth.getAccounts())[0];
+  // } else {
+  //   try {
+  //     tornadoAddress =
+  //       config.deployments[`netId${netId}`][currency].instanceAddress[amount];
+  //     if (!tornadoAddress) {
+  //       throw new Error();
+  //     }
+  //     tokenAddress = config.deployments[`netId${netId}`][currency].tokenAddress;
+  //   } catch (e) {
+  //     console.error(
+  //       "There is no such tornado instance, check the currency and amount you provide"
+  //     );
+  //     process.exit(1);
+  //   }
+  // }
+  // require("../scripts/compileHasher");
+  // require("../scripts/compileHasher3");
+  // const hasher2 = await deployContract("Hasher");
+  // const hasher3 = await deployContract("Hasher3");
+  // const verifier = await deployContract("Verifier");
+  // blender = await deployContract("NFTBlender", [
+  //   verifier.address,
+  //   hasher2.address,
+  //   hasher3.address,
+  //   MERKLE_TREE_HEIGHT,
+  // ]);
+  // if (isERC721) {
+  //   erc721 = await ethers.getContractAtFromArtifact(
+  //     erc721ContractJson.abi,
+  //     nftAdd
+  //   );
+  // } else {
+  //   erc1155 = await ethers.getContractAtFromArtifact(
+  //     erc1155ContractJson.abi,
+  //     nftAdd
+  //   );
+  // }
+  // tornado = new web3.eth.Contract(contractJson.abi, tornadoAddress);
+  // erc20 =
+  //   currency !== "eth"
+  //     ? new web3.eth.Contract(erc20ContractJson.abi, tokenAddress)
+  //     : {};
 }
 
 async function main() {
@@ -784,13 +929,38 @@ async function main() {
         "http://localhost:8545"
       )
       .option("-R, --relayer <URL>", "Withdraw via relayer");
+    // program
+    //   .command("deposit <NftAddress> <tokenId>")
+    //   .description("Submit a deposit of NFt token from specified Nft Contract")
+    //   .action(async (nftAdd, tokenId) => {
+    //     nftAdd = ethers.utils.getAddress(nftAdd);
+    //     isERC721 = true;
+    //     await init({
+    //       rpc: program.rpc,
+    //       nftAdd: nftAdd,
+    //       tokenId: tokenId,
+    //       isERC721: true,
+    //     });
+    //     await deposit({ nftAdd: nftAdd, tokenId: tokenId });
+    //   });
     program
-      .command("deposit <NftAddress> <tokenId>")
-      .description("Submit a deposit of NFt token from specified Nft Contract")
-      .action(async (nftAdd, tokenId) => {
-        nftAdd = ethers.utils.getAddress(nftAdd);
-        await init({ rpc: program.rpc, nftAdd, tokenId });
-        await deposit({ nftAdd, tokenId });
+      .command("deposit")
+      .description(
+        "Submit a deposit of NFt token from specified Nft Contract (for testing it will depoisit a mock nft token from a mock nft contract)"
+      )
+      .action(async () => {
+        await setupAccount();
+        await deployBlender();
+        await setupTestToken();
+        const nftAdd = ERC721Mock.address;
+        isERC721 = true;
+        await init({
+          rpc: program.rpc,
+          nftAdd: nftAdd,
+          tokenId: tokenId,
+          isERC721: true,
+        });
+        await deposit({ nftAdd: nftAdd, tokenId: tokenId });
       });
     program
       .command("withdraw <note> <recipient> [ETH_purchase]")

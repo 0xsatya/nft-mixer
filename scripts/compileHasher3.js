@@ -4,13 +4,13 @@ const fs = require("fs");
 const { ethers } = require("ethers");
 const { poseidon_gencontract } = require("circomlibjs");
 const outputPath = path.join(__dirname, "..", "artifacts", "contracts");
-const outputFile = path.join(outputPath, "Hasher.json");
+const outputFile = path.join(outputPath, "Hasher3.json");
 
 // const VM = require("ethereumjs-vm").default;
 // const BN = require("bn.js");
 // const vm = new VM();
 
-const inputCount = 2;
+const inputCount = 3;
 
 if (!fs.existsSync(outputPath)) {
   fs.mkdirSync(outputPath, { recursive: true });
@@ -38,8 +38,8 @@ const { abi, abiJson, bytecode } = getPoseidonFactory(inputCount);
 
 const contract = {
   _format: "hh-sol-artifact-1",
-  contractName: "Hasher",
-  sourceName: "contracts/Hasher.sol",
+  contractName: "Hasher3",
+  sourceName: "contracts/Hasher3.sol",
   abi: abiJson,
   bytecode: bytecode,
   deployedBytecode: bytecode,

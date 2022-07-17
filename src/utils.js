@@ -102,6 +102,18 @@ async function getSignerFromAddress(address) {
   return await ethers.provider.getSigner(address);
 }
 
+async function deployContract(name, args) {
+  const factory = await ethers.getContractFactory(name);
+  const ctr = await factory.deploy(...(args || []));
+  await ctr.deployed();
+
+  return ctr;
+}
+
+async function contractAt(name, address) {
+  return await ethers.getContractAt(name, address);
+}
+
 module.exports = {
   FIELD_SIZE,
   randomBN,
@@ -112,4 +124,6 @@ module.exports = {
   getExtDataHash,
   shuffle,
   getSignerFromAddress,
+  deployContract,
+  contractAt,
 };
