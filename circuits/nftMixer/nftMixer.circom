@@ -134,7 +134,7 @@ template Withdraw(levels) {
 }
 
 // component main {public [root , nullifierHash, tokenId, nftAddress]} = Withdraw(1);
-component main {public [root , nullifierHash]} = Withdraw(5);
+component main {public [root , nullifierHash]} = Withdraw(1);
 
 /* INPUT = {
     "root": "16296659098868975318610681305956664471851509760143234002578597065987613223531",

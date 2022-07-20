@@ -8,7 +8,8 @@ import "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import {IHasher3} from "./interfaces/IHasher3.sol";
 import "./MerkleTreeWithHistory.sol";
-import "hardhat/console.sol";
+
+// import "hardhat/console.sol";
 
 interface IVerifier {
     function verifyProof(bytes memory _proof, uint256[2] memory _input)
@@ -55,7 +56,7 @@ contract NFTBlender is
         address _hasher3,
         uint32 _merkleTreeHeight
     ) MerkleTreeWithHistory(_merkleTreeHeight, _hasher) {
-        console.log(" contract constructor......");
+        // console.log(" contract constructor......");
         verifier = _verifier;
         hasher3 = IHasher3(_hasher3);
     }
@@ -67,14 +68,14 @@ contract NFTBlender is
         uint256 _amount,
         bool _isERC721
     ) external {
-        console.log("🚀 ~ contract deposit started... :");
+        // console.log("contract deposit started... :");
         require(!commitments[_commitment], "The commitment has been submitted");
 
         uint32 insertedIndex = _insert(_commitment, bytes32(ZERO_VALUE));
         commitments[_commitment] = true;
         _processDeposit(_isERC721, _token, _tokenId);
-        console.log("🚀 ~ _commitment", _commitment);
-        console.log("🚀 ~ insertedIndex", insertedIndex);
+        // console.log("_commitment", _commitment);
+        // console.log("insertedIndex", insertedIndex);
         emit NFTDeposited(
             _token,
             _tokenId,
