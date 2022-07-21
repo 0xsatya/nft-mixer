@@ -35,8 +35,8 @@
 3.  If any param of the output/public.json file is changed..the proof will not work. Which shows the correct working of zksnark.
 
 ## Important terms and usecses
-1. pedersan hash - 
-2. posedein hash - 
+1. pedersen hash - It is used to hash the commitment and nullifier.
+2. poseidon hash - It is used to store leaves and hashed roots in merkle tree.
    
 ## Main issues/tasks pending for resolution
 1. 

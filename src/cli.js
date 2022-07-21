@@ -24,6 +24,8 @@ const { toWei, fromWei, toBN, BN } = require('web3-utils');
 const program = require('commander');
 const { toFixedHex, poseidonHash2, deployContract, contractAt, getSignerFromAddress } = require('./utils');
 
+const fetch = (url) => import('node-fetch').then(({ default: fetch }) => fetch(url));
+
 let provider,
   signer,
   senderAccount, //signer and senderAccount are same for testing
@@ -45,12 +47,13 @@ MERKLE_TREE_HEIGHT = process.env.MERKLE_TREE_HEIGHT || 20;
 /** Whether we are in a browser or node.js */
 const inBrowser = typeof window !== 'undefined';
 let isLocalRPC = false;
-const circutPath = path.join(__dirname, '/../circuit-build-nftMixer/output/');
-const artifactContractPath = path.join(__dirname, '/../artifacts/contracts/');
+const circutPath = path.join(__dirname, '/../circuit-build-nftMixer/output');
+// const circutPath = '/circuit-build-nftMixer/output';
+
+const artifactContractPath = path.join(__dirname, '/../artifacts/contracts');
 
 /** Generate random number of specified byte length */
 const rbigint = (nbytes) => bigIntUtils.leBuff2int(crypto.randomBytes(nbytes));
-console.log('rbigint', rbigint);
 
 /** Compute pedersen hash */
 const pedersenHash = (data) => {
@@ -62,7 +65,7 @@ const pedersenHash = (data) => {
 /** BigNumber to hex string of specified length */
 function toHex(number, length = 32) {
   const str = number instanceof Buffer ? number.toString('hex') : BigInt(number).toString(16);
-  console.log('number to hex', '0x' + str.padStart(length * 2, '0'));
+  // console.log('number to hex', '0x' + str.padStart(length * 2, '0'));
   return '0x' + str.padStart(length * 2, '0');
 }
 
@@ -88,6 +91,7 @@ async function setupAccount() {
   console.log('-------Settingup Account from the private key-------');
   provider = new ethers.getDefaultProvider();
   chainId = (await provider.getNetwork()).chainId;
+  netId = chainId;
   console.log('🚀 ~ chainId', chainId);
   PRIVATE_KEY = process.env.PRIVATE_KEY;
   if (PRIVATE_KEY) {
@@ -124,9 +128,9 @@ async function deployBlender() {
   // circuit = require(circutPath + 'nftMixer.json').json();
   // provingKey = fs.readFileSync(circutPath + 'nftMixer_final.zkey').buffer;
 
-  circuit = await (await fetch(`{circutPath}/nftMixer.json`)).json();
-  provingKey = await (await fetch(circutPath + 'nftMixer_final.zkey')).arrayBuffer;
-  verificationKey = await (await fetch(`{circutPath}/verification_key.json`)).json();
+  circuit = JSON.parse(fs.readFileSync(`${circutPath}/nftMixer.json`, 'utf8'));
+  provingKey = fs.readFileSync(circutPath + '/nftMixer_final.zkey').arrayBuffer;
+  verificationKey = JSON.parse(fs.readFileSync(`${circutPath}/verification_key.json`));
 }
 
 async function setupTestToken() {
@@ -142,6 +146,7 @@ async function setupTestToken() {
   console.log('-----Approving Token To Blender Contract-----');
   await (await erc721Mock.connect(senderAccount).approve(blender.address, tokenId)).wait();
   console.log('---- setupToken Successful -----');
+  return { nftAdd: erc721Mock.address, tokenId: tokenId };
 }
 
 /**
@@ -149,15 +154,28 @@ async function setupTestToken() {
  */
 function createDeposit({ nullifier, secret, tokenAddr, tokenId }) {
   const deposit = { nullifier, secret, tokenAddr, tokenId };
-  console.log('🚀 ~ deposit', deposit);
+  // console.log('🚀 ~ deposit', deposit);
   const nfr = { nullifier, tokenAddr, tokenId };
-  console.log(
-    '🚀 ~ bigIntUtils.leInt2Buff(nfr.nullifier, 16),',
-    bigIntUtils.leInt2Buff(nfr.nullifier, 31),
-    bigIntUtils.leInt2Buff(nfr.tokenAddr, 31),
-    bigIntUtils.leInt2Buff(nfr.tokenId, 31),
-    bigIntUtils.leInt2Buff(deposit.secret, 31),
-  );
+  // console.log('🚀 👉🏼 checking tokenAddrss to and fro conversion :');
+  // console.log('nft.tokenAdd in BigInt:', nfr.tokenAddr);
+  // console.log('nft.tokenAdd from bigInt to hex:', toHex(nfr.tokenAddr));
+  // console.log('int to buff :', bigIntUtils.leInt2Buff(nfr.tokenAddr, 31));
+  // console.log(
+  //   '🚀 int to buff to int to buff :',
+  //   bigIntUtils.leInt2Buff(bigIntUtils.leBuff2int(bigIntUtils.leInt2Buff(nfr.tokenAddr, 31)), 31),
+  // );
+  // contract address = 32 bytes (actual 20 byte value size or 40 hex chars or 160 bits
+  // contract address => it is last 20 bytes o fkeccak-256 hash of public key)
+  // with 0x it is 42 char long
+  // 0x 46 b1 42 DD 1E 92 4F Ab 83 eC c3 c0 8e 4D 46 E8 2f 00 5e 0E
+  // 0x46b142dd1e924fab83ecc3c08e4d46e82f005e0e
+  // console.log(
+  //   '🚀 ~ bigIntUtils.leInt2Buff(nfr.nullifier, 16),',
+  //   bigIntUtils.leInt2Buff(nfr.nullifier, 31),
+  //   bigIntUtils.leInt2Buff(nfr.tokenAddr, 31),
+  //   bigIntUtils.leInt2Buff(nfr.tokenId, 31),
+  //   bigIntUtils.leInt2Buff(deposit.secret, 31),
+  // );
 
   nfr.preimage = Buffer.concat([
     bigIntUtils.leInt2Buff(nfr.nullifier, 31),
@@ -166,19 +184,36 @@ function createDeposit({ nullifier, secret, tokenAddr, tokenId }) {
   ]);
   deposit.preimage = Buffer.concat([
     bigIntUtils.leInt2Buff(deposit.nullifier, 31),
-    bigIntUtils.leInt2Buff(deposit.secret, 31),
     bigIntUtils.leInt2Buff(deposit.tokenAddr, 31),
     bigIntUtils.leInt2Buff(deposit.tokenId, 31),
+    bigIntUtils.leInt2Buff(deposit.secret, 31),
   ]);
+
   deposit.commitment = pedersenHash(deposit.preimage);
   deposit.commitmentHex = toHex(deposit.commitment);
   deposit.nullifierHash = pedersenHash(nfr.preimage);
   deposit.nullifierHex = toHex(deposit.nullifierHash);
 
-  console.log('createDeposit ~ deposit.commitment', deposit.commitment);
-  console.log('createDeposit ~ deposit.commitmentHex', deposit.commitmentHex);
-  console.log('createDeposit ~ deposit.nullifierHash', deposit.nullifierHash);
-  console.log('createDeposit ~ deposit.nullifierHex', deposit.nullifierHex);
+  console.log('===> deposit nullifer int           :', deposit.nullifier);
+  console.log('===> deposit nullifer buff          :', bigIntUtils.leInt2Buff(deposit.nullifier, 31));
+  console.log('===> deposit nullifer from preimage :', deposit.preimage.slice(0, 31));
+  console.log('===> deposit nullifer from bytes :', Buffer.from(deposit.preimage.slice(0, 31), 'hex'));
+
+  console.log(
+    '===> deposit nullifer from preimage int:',
+    bigIntUtils.leBuff2int(deposit.preimage.slice(0, 31)),
+  );
+  console.log(
+    '===> deposit nullifer from preimage int:',
+    bigIntUtils.leBuff2int(bigIntUtils.leInt2Buff(deposit.nullifier, 31)),
+  );
+  console.log('===> complete preimage :', deposit.preimage);
+
+  // console.log('🚀 => createDeposit => deposit.preimage as NOTE string', deposit.preimage);
+  // console.log('createDeposit ~ deposit.commitment', deposit.commitment);
+  // console.log('createDeposit ~ deposit.commitmentHex', deposit.commitmentHex);
+  // console.log('createDeposit ~ deposit.nullifierHash', deposit.nullifierHash);
+  // console.log('createDeposit ~ deposit.nullifierHex', deposit.nullifierHex);
   return deposit;
 }
 
@@ -201,72 +236,23 @@ async function deposit({
     tokenId: BigInt(tokenId),
   });
 
-  console.log('deposit ~ deposit', deposit);
+  console.log('🚀 ===> deposit ~ deposit', deposit);
 
   const note = toHex(deposit.preimage, 124);
-  console.log('🚀 ~ note', note);
-  const noteString = `blender-${nftAdd}-${tokenId}-${note}`;
+  console.log('🚀 hex note string : ', note);
+  const noteString = `blender-${nftAdd}-${tokenId}-${netId}-${note}`;
 
   console.log(`Your note: ${noteString}`);
-
-  // if (currency === "eth") {
-  // await printETHBalance({ address: tornado._address, name: "Tornado" });
-  // await printETHBalance({ address: senderAccount, name: "Sender account" });
-  // const value = isLocalRPC
-  //   ? ETH_AMOUNT
-  //   : fromDecimals({ amount, decimals: 18 });
-  // console.log("Submitting deposit transaction");
-  // await blender
-  //   .deposit(toHex(deposit.commitment))
-  //   .send({ value, from: senderAccount, gas: 2e6 });
-  // await printETHBalance({ address: tornado._address, name: "Tornado" });
-  // await printETHBalance({ address: senderAccount, name: "Sender account" });
-  // } else {
-  // a token
-  // todo: check token onwer;
-  // todo: approve token transfer to nftMixer;
-  // todo: send transaction to nifMixer;
-  // await printERC20Balance({ address: tornado._address, name: "Tornado" });
-  // await printERC20Balance({ address: senderAccount, name: "Sender account" });
-  // const decimals = isLocalRPC
-  //   ? 18
-  //   : config.deployments[`netId${netId}`][currency].decimals;
-  // const tokenAmount = isLocalRPC
-  //   ? TOKEN_AMOUNT
-  //   : fromDecimals({ amount, decimals });
-  // if (isLocalRPC) {
-  //   console.log("Minting some test tokens to deposit");
-  //   await erc20.methods
-  //     .mint(senderAccount, tokenAmount)
-  //     .send({ from: senderAccount, gas: 2e6 });
-  // }
-  // const allowance = await erc20.methods
-  //   .allowance(senderAccount, tornado._address)
-  //   .call({ from: senderAccount });
-  // console.log("Current allowance is", fromWei(allowance));
-  // if (toBN(allowance).lt(toBN(tokenAmount))) {
-  //   console.log("Approving tokens for deposit");
-  //   await erc20.methods
-  //     .approve(tornado._address, tokenAmount)
-  //     .send({ from: senderAccount, gas: 1e6 });
-  // }
-  // console.log("Submitting deposit transaction");
-  // await blender
-  //   .deposit(toHex(deposit.commitment))
-  //   .send({ from: senderAccount, gas: 2e6 });
-  // await printERC20Balance({ address: tornado._address, name: "Tornado" });
-  // await printERC20Balance({ address: senderAccount, name: "Sender account" });
-  // }
   console.log('Submitting deposit transaction');
   const tx = await blender
     .connect(senderAccount)
     .depositNft(toHex(deposit.commitment), nftAdd, tokenId, ethers.utils.parseEther('1'), true);
   let res = await tx.wait();
-  console.log('🚀 ~ tx', tx);
-  console.log('🚀 ~ res', res, res.blockNumber);
+  // console.log('🚀 ~ tx', tx);
+  // console.log('🚀 ~ res', res, res.blockNumber);
   // console.log("--- Filtering Deposit data ---");
-  // let depositData = await loadDepositData(note);
-  // console.log("🚀 ~ depositData", depositData);
+  // let depositData = await loadDepositData({ deposit });
+  // console.log('🚀 ~ depositData', depositData);
   return noteString;
 }
 
@@ -646,21 +632,37 @@ function waitForTxReceipt({ txHash, attempts = 60, delay = 1000 }) {
  * @param noteString the note
  */
 function parseNote(noteString) {
-  const noteRegex = /tornado-(?<currency>\w+)-(?<amount>[\d.]+)-(?<netId>\d+)-0x(?<note>[0-9a-fA-F]{124})/g;
+  const noteRegex = /blender-(?<tokenAddr>\w+)-(?<tokenId>[\d.]+)-(?<netId>\d+)-0x(?<note>[0-9a-fA-F]{248})/g;
   const match = noteRegex.exec(noteString);
   if (!match) {
     throw new Error('The note has invalid format');
   }
 
   const buf = Buffer.from(match.groups.note, 'hex');
-  const nullifier = bigInt.leBuff2int(buf.slice(0, 31));
-  const secret = bigInt.leBuff2int(buf.slice(31, 62));
-  const deposit = createDeposit({ nullifier, secret });
+
+  console.log('🚀 => parseNote => note buffer', buf);
+  console.log('🚀 => parseNote => match.groups.note in hex:', match.groups.note);
+
+  console.log('===> parseNoteString nullifier :', buf.slice(0, 31));
+  const nullifier = bigIntUtils.leBuff2int(buf.slice(0, 31));
+  console.log('===> parseNote => nullifier in int', nullifier);
+
+  const tokenAddr = bigIntUtils.leBuff2int(buf.slice(31, 62));
+  console.log('🚀 => parseNote => tokenAddr', toHex(tokenAddr, 31));
+
+  const tokenId = bigIntUtils.leBuff2int(buf.slice(62, 93));
+  console.log('🚀 => parseNote => tokenId', tokenId);
+
+  const secret = bigIntUtils.leBuff2int(buf.slice(93, 124));
+
+  const deposit = createDeposit({ nullifier, secret, tokenAddr, tokenId });
+  console.log('🚀 ====> withdraw parseNote => deposit', deposit);
   const netId = Number(match.groups.netId);
+  console.log('🚀 => parseNote => netId', netId);
 
   return {
-    currency: match.groups.currency,
-    amount: match.groups.amount,
+    tokenAddr: match.groups.tokenAddr,
+    tokenId: match.groups.tokenId,
     netId,
     deposit,
   };
@@ -676,12 +678,12 @@ async function loadDepositData({ deposit }) {
     //   toBlock: "latest",
     // });
     const filter = blender.filters.NFTDeposited();
-    console.log('🚀 ~ filter', filter);
+    // console.log('🚀 ~ filter', filter);
     const fromBlock = await ethers.provider.getBlockNumber();
-    console.log('🚀 ~ fromBlock', fromBlock);
+    // console.log('🚀 ~ fromBlock', fromBlock);
 
     const eventWhenHappened = await blender.queryFilter(filter, 0, fromBlock);
-    console.log('🚀 ~ eventWhenHappened', eventWhenHappened);
+    // console.log('🚀 => loadDepositData => eventWhenHappened', eventWhenHappened);
 
     if (eventWhenHappened.length === 0) {
       throw new Error('There is no related deposit, the note is invalid');
@@ -689,7 +691,7 @@ async function loadDepositData({ deposit }) {
 
     const { timestamp } = eventWhenHappened[0].args;
     const txHash = eventWhenHappened[0].transactionHash;
-    const isSpent = await blender.isSpent(deposit.nullifierHex).call();
+    const isSpent = await blender.isSpent(deposit.nullifierHex);
     // const receipt = await web3.eth.getTransactionReceipt(txHash);
 
     return {
@@ -761,9 +763,9 @@ async function loadWithdrawalData({ amount, currency, deposit }) {
 //     // web3 = new Web3(rpc, null, { transactionConfirmationBlocks: 1 });
 //     // blenderJson = require(contractArtifactPath +
 //     //   "NFTBlender.sol/NFTBlender.json");
-//     console.log('🚀 ~ circutPath', circutPath);
-//     circuit = require(circutPath + 'nftMixer.json');
-//     provingKey = fs.readFileSync(circutPath + 'nftMixer_final.zkey').buffer;
+//     // console.log('🚀 ~ circutPath', circutPath);
+//     // circuit = require(circutPath + 'nftMixer.json');
+//     // provingKey = fs.readFileSync(circutPath + 'nftMixer_final.zkey').buffer;
 //     // MERKLE_TREE_HEIGHT = process.env.MERKLE_TREE_HEIGHT || 20;
 //     // ETH_AMOUNT = process.env.ETH_AMOUNT;
 //     // TOKEN_AMOUNT = process.env.TOKEN_AMOUNT;
@@ -889,8 +891,9 @@ async function main() {
       .action(async () => {
         await setupAccount();
         await deployBlender();
-        await setupTestToken();
-        const nftAdd = erc721Mock.address;
+        let { nftAdd, tokenId } = await setupTestToken();
+        // const nftAdd = erc721Mock.address;
+        console.log('🧨 nftAdd and tokenId :', nftAdd, tokenId);
         isERC721 = true;
         // await init({
         //   rpc: program.rpc,
@@ -898,7 +901,33 @@ async function main() {
         //   tokenId: tokenId,
         //   isERC721: true,
         // });
-        await deposit({ nftAdd: nftAdd, tokenId: tokenId });
+        console.log('🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀');
+
+        let noteString = await deposit({ nftAdd: nftAdd, tokenId: tokenId });
+
+        console.log('🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀');
+
+        //TODO: use below code in withdraw command
+        let { tokenAddr, tokenId: nftId, netId, deposit: depositObj } = parseNote(noteString);
+
+        console.log('🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀');
+
+        // console.log(
+        //   '🚀 => .action =>  tokenAddr, tokenId: nftId, netId, deposit: ',
+        //   tokenAddr,
+        //   nftId,
+        //   netId,
+        //   depositObj,
+        // );
+
+        // await withdraw({
+        //   deposit,
+        //   currency,
+        //   amount,
+        //   recipient,
+        //   refund,
+        //   relayerURL: program.relayer,
+        // });
       });
     program
       .command('withdraw <note> <recipient> [ETH_purchase]')
