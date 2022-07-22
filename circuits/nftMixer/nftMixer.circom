@@ -68,7 +68,7 @@ template CommitmentHasher() {
     signal output nullifierHash;
 
     component commitmentHasher = Pedersen(496);
-    component nullifierHasher = Pedersen(248);
+    component nullifierHasher = Pedersen(372);
     component nullifierBits = Num2Bits(124);
     component nftAdrBits = Num2Bits(124);
     component tokenIdBits = Num2Bits(124);
@@ -80,6 +80,7 @@ template CommitmentHasher() {
     for (var i = 0; i < 124; i++) {
         nullifierHasher.in[i] <== nullifierBits.out[i];
         nullifierHasher.in[i + 124] <== nftAdrBits.out[i];
+        nullifierHasher.in[i + 248] <== tokenIdBits.out[i];
         commitmentHasher.in[i] <== nullifierBits.out[i];
         commitmentHasher.in[i + 124] <== nftAdrBits.out[i];
         commitmentHasher.in[i + 248] <== tokenIdBits.out[i];
