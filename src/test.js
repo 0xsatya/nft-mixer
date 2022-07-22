@@ -84,6 +84,7 @@ function main() {
 
   let buffToInt = beBuff2int(intToBuff);
   console.log('🚀 => main => buffToInt', buffToInt);
+
   console.log('-------using npm module---------');
   const rbigintMod = bigIntUtils.beBuff2int(rBytesArr);
   console.log('🚀 => main => rbigintMod:', rbigintMod);

@@ -53,7 +53,7 @@ const circutPath = path.join(__dirname, '/../circuit-build-nftMixer/output');
 const artifactContractPath = path.join(__dirname, '/../artifacts/contracts');
 
 /** Generate random number of specified byte length */
-const rbigint = (nbytes) => bigIntUtils.leBuff2int(crypto.randomBytes(nbytes));
+const rbigint = (nbytes) => bigIntUtils.beBuff2int(crypto.randomBytes(nbytes));
 
 /** Compute pedersen hash */
 const pedersenHash = (data) => {
@@ -159,10 +159,10 @@ function createDeposit({ nullifier, secret, tokenAddr, tokenId }) {
   // console.log('🚀 👉🏼 checking tokenAddrss to and fro conversion :');
   // console.log('nft.tokenAdd in BigInt:', nfr.tokenAddr);
   // console.log('nft.tokenAdd from bigInt to hex:', toHex(nfr.tokenAddr));
-  // console.log('int to buff :', bigIntUtils.leInt2Buff(nfr.tokenAddr, 31));
+  // console.log('int to buff :', bigIntUtils.beInt2Buff(nfr.tokenAddr, 31));
   // console.log(
   //   '🚀 int to buff to int to buff :',
-  //   bigIntUtils.leInt2Buff(bigIntUtils.leBuff2int(bigIntUtils.leInt2Buff(nfr.tokenAddr, 31)), 31),
+  //   bigIntUtils.beInt2Buff(bigIntUtils.beBuff2int(bigIntUtils.beInt2Buff(nfr.tokenAddr, 31)), 31),
   // );
   // contract address = 32 bytes (actual 20 byte value size or 40 hex chars or 160 bits
   // contract address => it is last 20 bytes o fkeccak-256 hash of public key)
@@ -170,23 +170,23 @@ function createDeposit({ nullifier, secret, tokenAddr, tokenId }) {
   // 0x 46 b1 42 DD 1E 92 4F Ab 83 eC c3 c0 8e 4D 46 E8 2f 00 5e 0E
   // 0x46b142dd1e924fab83ecc3c08e4d46e82f005e0e
   // console.log(
-  //   '🚀 ~ bigIntUtils.leInt2Buff(nfr.nullifier, 16),',
-  //   bigIntUtils.leInt2Buff(nfr.nullifier, 31),
-  //   bigIntUtils.leInt2Buff(nfr.tokenAddr, 31),
-  //   bigIntUtils.leInt2Buff(nfr.tokenId, 31),
-  //   bigIntUtils.leInt2Buff(deposit.secret, 31),
+  //   '🚀 ~ bigIntUtils.beInt2Buff(nfr.nullifier, 16),',
+  //   bigIntUtils.beInt2Buff(nfr.nullifier, 31),
+  //   bigIntUtils.beInt2Buff(nfr.tokenAddr, 31),
+  //   bigIntUtils.beInt2Buff(nfr.tokenId, 31),
+  //   bigIntUtils.beInt2Buff(deposit.secret, 31),
   // );
 
   nfr.preimage = Buffer.concat([
-    bigIntUtils.leInt2Buff(nfr.nullifier, 31),
-    bigIntUtils.leInt2Buff(nfr.tokenAddr, 31),
-    bigIntUtils.leInt2Buff(nfr.tokenId, 31),
+    bigIntUtils.beInt2Buff(nfr.nullifier, 31),
+    bigIntUtils.beInt2Buff(nfr.tokenAddr, 31),
+    bigIntUtils.beInt2Buff(nfr.tokenId, 31),
   ]);
   deposit.preimage = Buffer.concat([
-    bigIntUtils.leInt2Buff(deposit.nullifier, 31),
-    bigIntUtils.leInt2Buff(deposit.tokenAddr, 31),
-    bigIntUtils.leInt2Buff(deposit.tokenId, 31),
-    bigIntUtils.leInt2Buff(deposit.secret, 31),
+    bigIntUtils.beInt2Buff(deposit.nullifier, 31),
+    bigIntUtils.beInt2Buff(deposit.tokenAddr, 31),
+    bigIntUtils.beInt2Buff(deposit.tokenId, 31),
+    bigIntUtils.beInt2Buff(deposit.secret, 31),
   ]);
 
   deposit.commitment = pedersenHash(deposit.preimage);
@@ -195,17 +195,17 @@ function createDeposit({ nullifier, secret, tokenAddr, tokenId }) {
   deposit.nullifierHex = toHex(deposit.nullifierHash);
 
   console.log('===> deposit nullifer int           :', deposit.nullifier);
-  console.log('===> deposit nullifer buff          :', bigIntUtils.leInt2Buff(deposit.nullifier, 31));
+  console.log('===> deposit nullifer buff          :', bigIntUtils.beInt2Buff(deposit.nullifier, 31));
   console.log('===> deposit nullifer from preimage :', deposit.preimage.slice(0, 31));
   console.log('===> deposit nullifer from bytes :', Buffer.from(deposit.preimage.slice(0, 31), 'hex'));
 
   console.log(
     '===> deposit nullifer from preimage int:',
-    bigIntUtils.leBuff2int(deposit.preimage.slice(0, 31)),
+    bigIntUtils.beBuff2int(deposit.preimage.slice(0, 31)),
   );
   console.log(
     '===> deposit nullifer from preimage int:',
-    bigIntUtils.leBuff2int(bigIntUtils.leInt2Buff(deposit.nullifier, 31)),
+    bigIntUtils.beBuff2int(bigIntUtils.beInt2Buff(deposit.nullifier, 31)),
   );
   console.log('===> complete preimage :', deposit.preimage);
 
@@ -644,16 +644,16 @@ function parseNote(noteString) {
   console.log('🚀 => parseNote => match.groups.note in hex:', match.groups.note);
 
   console.log('===> parseNoteString nullifier :', buf.slice(0, 31));
-  const nullifier = bigIntUtils.leBuff2int(buf.slice(0, 31));
+  const nullifier = bigIntUtils.beBuff2int(buf.slice(0, 31));
   console.log('===> parseNote => nullifier in int', nullifier);
 
-  const tokenAddr = bigIntUtils.leBuff2int(buf.slice(31, 62));
-  console.log('🚀 => parseNote => tokenAddr', toHex(tokenAddr, 31));
+  const tokenAddr = bigIntUtils.beBuff2int(buf.slice(31, 62));
+  console.log('🚀 => parseNote => tokenAddr', toHex(tokenAddr, 20));
 
-  const tokenId = bigIntUtils.leBuff2int(buf.slice(62, 93));
+  const tokenId = bigIntUtils.beBuff2int(buf.slice(62, 93));
   console.log('🚀 => parseNote => tokenId', tokenId);
 
-  const secret = bigIntUtils.leBuff2int(buf.slice(93, 124));
+  const secret = bigIntUtils.beBuff2int(buf.slice(93, 124));
 
   const deposit = createDeposit({ nullifier, secret, tokenAddr, tokenId });
   console.log('🚀 ====> withdraw parseNote => deposit', deposit);
@@ -920,6 +920,10 @@ async function main() {
         //   depositObj,
         // );
 
+        // call verifier.sol, => nullifierHash, nftAdd, tokenId, secret
+        // check Hasher2 => check if nullifeirHash = nullifier, tokenAdd.
+        // check Hasher3 => check if nullifeirHash = nullifier, tokenId, tokenAdd.
+        // later check for rtokenId as well
         // await withdraw({
         //   deposit,
         //   currency,
@@ -928,6 +932,8 @@ async function main() {
         //   refund,
         //   relayerURL: program.relayer,
         // });
+
+        //
       });
     program
       .command('withdraw <note> <recipient> [ETH_purchase]')
