@@ -9,10 +9,17 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import { IHasher3 } from "./interfaces/IHasher3.sol";
 import "./MerkleTreeWithHistory.sol";
 
-// import "hardhat/console.sol";
+import "hardhat/console.sol";
 
 interface IVerifier {
-    function verifyProof(bytes memory _proof, uint256[4] memory _input) external returns (bool);
+    // function verifyProof(bytes memory _proof, uint256[4] memory _input) external returns (bool);
+
+    function verifyProof(
+        uint256[2] memory a,
+        uint256[2][2] memory b,
+        uint256[2] memory c,
+        uint256[4] memory input
+    ) external returns (bool);
 }
 
 contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, MerkleTreeWithHistory {
@@ -86,10 +93,19 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
         return hasher3.poseidon(input);
     }
 
+    function parseProof(bytes memory proof, uint256[4] memory _input) internal returns (bool r) {
+        // solidity does not support decoding uint[2][2] yet
+        (uint256[2] memory a, uint256[2] memory b1, uint256[2] memory b2, uint256[2] memory c) = abi.decode(
+            proof,
+            (uint256[2], uint256[2], uint256[2], uint256[2])
+        );
+        r = verifier.verifyProof(a, [b1, b2], c, _input);
+    }
+
     function withdrawNft(
         bytes memory _proof,
-        bytes32 _root,
-        bytes32 _nullifierHash,
+        uint256 _root,
+        uint256 _nullifierHash,
         address payable _recipient,
         address payable _relayer,
         uint256 _fee,
@@ -105,39 +121,36 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
             2. msg.sender should be nft receipient.
             3. nullifier should be unused.
          */
-        require(!nullifierHashes[_nullifierHash], "The note has been already spent");
-        require(isKnownRoot(_root), "Cannot find your merkle root"); // Make sure to use a recent one
+        console.log("------------------------------------");
+        require(!nullifierHashes[bytes32(_nullifierHash)], "The note has been already spent");
+        require(isKnownRoot(bytes32(_root)), "Cannot find your merkle root"); // Make sure to use a recent one
         if (isWithdraw) {
             uint256[3] memory input;
             input[0] = uint256(_nullifier);
             input[1] = uint256(uint160(_tokenAddrs));
             input[2] = uint256(_tokenId);
-            require(_nullifierHash == bytes32(hasher3.poseidon(input)), "nullifier Hash mismatch");
+            require(_nullifierHash == (hasher3.poseidon(input)), "nullifier Hash mismatch");
         }
-        uint256[8] memory p = abi.decode(_proof, (uint256[8]));
+        uint256[4] memory _input;
+        _input[0] = uint256(_root);
+        _input[1] = uint256(_nullifierHash);
+        _input[2] = uint256(uint160(_tokenAddrs));
+        _input[3] = _tokenId;
 
-        require(
-            verifier.verifyProof(
-                _proof,
-                [
-                    uint256(_root),
-                    uint256(_nullifierHash),
-                    //uint256(_recipient),
-                    //uint256(_relayer),
-                    //_fee,
-                    //_refund
-                    _tokenId,
-                    uint256(uint160(_tokenAddrs))
-                ]
-            ),
-            "Invalid withdraw proof"
-        );
+        console.log(_input[0], _input[1], _input[2], _input[3]);
 
-        nullifierHashes[_nullifierHash] = true;
+        // uint256[8] memory p = abi.decode(_proof, (uint256[8]));
+        bool result = parseProof(_proof, _input);
+
+        // console.log(a[0], a[1]);
+        require(result, "Invalid withdraw proof");
+        // require(verifier.verifyProof(a, [b1, b2], c, _input), "Invalid withdraw proof");
+
+        nullifierHashes[bytes32(_nullifierHash)] = true;
 
         _processWithdrawNft(_tokenAddrs, _tokenId, _recipient, isERC721);
 
-        emit NFTWithdrawn(_nullifierHash, _recipient, _tokenAddrs, _tokenId, _fee, isERC721);
+        emit NFTWithdrawn(bytes32(_nullifierHash), _recipient, _tokenAddrs, _tokenId, _fee, isERC721);
     }
 
     function _processWithdrawNft(

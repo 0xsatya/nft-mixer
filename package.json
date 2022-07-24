@@ -11,7 +11,8 @@
     "deploy:contract": "hardhat deploy:contract",
     "test": "hardhat test",
     "test:report-gas": "REPORT_GAS=true hardhat test",
-    "test:coverage": "hardhat coverage"
+    "test:coverage": "hardhat coverage",
+    "test:cli": "hh compile && node src/cli.js deposit"
   },
   "devDependencies": {},
   "config": {

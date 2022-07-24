@@ -409,16 +409,34 @@ async function generateProof({
   const { root, pathElements, pathIndices } = await generateMerkleProof(deposit, { blender });
 
   // Prepare circuit input
+  // const input = {
+  //   // Public snark inputs
+  //   root: root,
+  //   nullifierHash: deposit.nullifierHash,
+  //   recipient: BigNumber.from(recipient),
+  //   relayer: BigNumber.from(relayerAddress),
+  //   fee: BigNumber.from(fee),
+  //   refund: BigNumber.from(refund),
+  //   nftAddress: BigNumber.from(deposit.tokenAddr),
+  //   tokenId: BigNumber.from(deposit.tokenId),
+
+  //   // Private snark inputs
+  //   nullifier: deposit.nullifier,
+  //   secret: deposit.secret,
+  //   pathElements: pathElements,
+  //   pathIndices: pathIndices,
+  // };
+
   const input = {
     // Public snark inputs
     root: root,
     nullifierHash: deposit.nullifierHash,
-    recipient: BigNumber.from(recipient),
-    relayer: BigNumber.from(relayerAddress),
-    fee: BigNumber.from(fee),
-    refund: BigNumber.from(refund),
-    nftAddress: BigNumber.from(deposit.tokenAddr),
-    tokenId: BigNumber.from(deposit.tokenId),
+    recipient: recipient,
+    relayer: relayerAddress,
+    fee: fee,
+    refund: refund,
+    nftAddress: deposit.tokenAddr,
+    tokenId: deposit.tokenId,
 
     // Private snark inputs
     nullifier: deposit.nullifier,
@@ -433,10 +451,32 @@ async function generateProof({
   // const proofData = await websnarkUtils.genWitnessAndProve(groth16, input, circuit, proving_key);
   // const { proof } = websnarkUtils.toSolidityInput(proofData);
 
-  // const { proof, publicSignals } = await groth16.prove(
-  //   circutPath + '/nftMixer_final.zkey',
-  //   circutPath + '/nftMixer.wtns',
-  // );
+  const { proof, publicSignals } = await groth16.prove(
+    circutPath + '/nftMixer_final.zkey',
+    circutPath + '/nftMixer.wtns',
+  );
+  console.log('🚀 => publicSignals', publicSignals);
+  console.log('🚀 => proof', proof);
+
+  const calldata = await groth16.exportSolidityCallData(proof, publicSignals);
+  const argv = calldata
+    .replace(/["[\]\s]/g, '')
+    .split(',')
+    .map((x) => BigInt(x).toString());
+
+  const a = [argv[0], argv[1]];
+  const b = [
+    [argv[2], argv[3]],
+    [argv[4], argv[5]],
+  ];
+  const c = [argv[6], argv[7]];
+  const publicInput = [];
+
+  for (let i = 8; i < argv.length; i++) {
+    publicInput.push(argv[i]);
+  }
+
+  // return { a, b, c, Input };
 
   // console.timeEnd('Proof time');
   // console.log('proof', proof, publicSignals);
@@ -445,9 +485,12 @@ async function generateProof({
   const zkeyPath = circutPath + '/nftMixer_final.zkey';
 
   console.log('🚀 =>===============');
-  const dataResult = await exportCallDataGroth16(toObject(input), wasmPath, zkeyPath);
-  let verResult = await verifier.verifyProof(dataResult.a, dataResult.b, dataResult.c, dataResult.Input);
+  // const dataResult = await exportCallDataGroth16(toObject(input), wasmPath, zkeyPath);
+
+  let verResult = await verifier.verifyProof(a, b, c, publicInput);
   console.log('🚀 => verResult', verResult);
+  console.log('🚀 =>===============');
+  console.log('🚀 => verResult', a, b, c, publicInput);
   console.log('🚀 =>===============');
 
   // const verificationResult = await groth16.verify(
@@ -462,15 +505,28 @@ async function generateProof({
   );
   console.log('🚀 => verificationResult', verificationResult);
 
+  // const args = [
+  //   toHex(input.root),
+  //   toHex(input.nullifierHash),
+  //   toHex(input.recipient, 20),
+  //   toHex(input.relayer, 20),
+  //   toHex(input.fee),
+  //   toHex(input.nullifier),
+  //   toHex(input.nftAddress, 20),
+  //   toHex(input.tokenId),
+  //   true,
+  //   true,
+  // ];
+
   const args = [
-    toHex(input.root),
-    toHex(input.nullifierHash),
+    input.root,
+    input.nullifierHash,
     toHex(input.recipient, 20),
     toHex(input.relayer, 20),
-    toHex(input.fee),
-    toHex(input.nullifier),
+    input.fee,
+    input.nullifier,
     toHex(input.nftAddress, 20),
-    toHex(input.tokenId),
+    input.tokenId,
     true,
     true,
   ];
