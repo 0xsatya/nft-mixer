@@ -6,23 +6,16 @@ import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import {IHasher3} from "./interfaces/IHasher3.sol";
+import { IHasher3 } from "./interfaces/IHasher3.sol";
 import "./MerkleTreeWithHistory.sol";
 
 // import "hardhat/console.sol";
 
 interface IVerifier {
-    function verifyProof(bytes memory _proof, uint256[2] memory _input)
-        external
-        returns (bool);
+    function verifyProof(bytes memory _proof, uint256[4] memory _input) external returns (bool);
 }
 
-contract NFTBlender is
-    IERC1155Receiver,
-    IERC721Receiver,
-    ReentrancyGuard,
-    MerkleTreeWithHistory
-{
+contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, MerkleTreeWithHistory {
     IVerifier public immutable verifier;
     IHasher3 public immutable hasher3;
 
@@ -39,14 +32,7 @@ contract NFTBlender is
         uint32 leafIndex,
         uint256 timestamp
     );
-    event NFTWithdrawn(
-        bytes32 nullifierHash,
-        address recipient,
-        address token,
-        uint256 tokenId,
-        uint256 value,
-        bool isERC721
-    );
+    event NFTWithdrawn(bytes32 nullifierHash, address recipient, address token, uint256 tokenId, uint256 value, bool isERC721);
 
     event NFTTransferred(bool resutl);
 
@@ -76,15 +62,7 @@ contract NFTBlender is
         _processDeposit(_isERC721, _token, _tokenId);
         // console.log("_commitment", _commitment);
         // console.log("insertedIndex", insertedIndex);
-        emit NFTDeposited(
-            _token,
-            _tokenId,
-            _amount,
-            _isERC721,
-            _commitment,
-            insertedIndex,
-            block.timestamp
-        );
+        emit NFTDeposited(_token, _tokenId, _amount, _isERC721, _commitment, insertedIndex, block.timestamp);
     }
 
     function _processDeposit(
@@ -92,24 +70,24 @@ contract NFTBlender is
         address _token,
         uint256 _tokenId
     ) internal {
-        if (_isERC721)
-            IERC721(_token).safeTransferFrom(
-                msg.sender,
-                address(this),
-                _tokenId
-            );
-        else
-            IERC1155(_token).safeTransferFrom(
-                msg.sender,
-                address(this),
-                _tokenId,
-                1,
-                ""
-            );
+        if (_isERC721) IERC721(_token).safeTransferFrom(msg.sender, address(this), _tokenId);
+        else IERC1155(_token).safeTransferFrom(msg.sender, address(this), _tokenId, 1, "");
+    }
+
+    function poseidon3(
+        uint256 a,
+        uint256 b,
+        uint256 c
+    ) public view returns (uint256) {
+        uint256[3] memory input;
+        input[0] = uint256(a);
+        input[1] = uint256(b);
+        input[2] = uint256(c);
+        return hasher3.poseidon(input);
     }
 
     function withdrawNft(
-        bytes calldata _proof,
+        bytes memory _proof,
         bytes32 _root,
         bytes32 _nullifierHash,
         address payable _recipient,
@@ -127,30 +105,29 @@ contract NFTBlender is
             2. msg.sender should be nft receipient.
             3. nullifier should be unused.
          */
-        require(
-            !nullifierHashes[_nullifierHash],
-            "The note has been already spent"
-        );
+        require(!nullifierHashes[_nullifierHash], "The note has been already spent");
         require(isKnownRoot(_root), "Cannot find your merkle root"); // Make sure to use a recent one
         if (isWithdraw) {
-            bytes32[3] memory input;
-            input[0] = bytes32(_nullifier);
-            input[1] = bytes32(uint256(uint160(_tokenAddrs)) << 96);
-            input[2] = bytes32(_tokenId);
-            hasher3.poseidon(input);
+            uint256[3] memory input;
+            input[0] = uint256(_nullifier);
+            input[1] = uint256(uint160(_tokenAddrs));
+            input[2] = uint256(_tokenId);
+            require(_nullifierHash == bytes32(hasher3.poseidon(input)), "nullifier Hash mismatch");
         }
+        uint256[8] memory p = abi.decode(_proof, (uint256[8]));
+
         require(
             verifier.verifyProof(
                 _proof,
                 [
                     uint256(_root),
-                    uint256(_nullifierHash)
+                    uint256(_nullifierHash),
                     //uint256(_recipient),
                     //uint256(_relayer),
                     //_fee,
                     //_refund
-                    //uint256(_tokenId),
-                    //uint256(_tokenAddrs),
+                    _tokenId,
+                    uint256(uint160(_tokenAddrs))
                 ]
             ),
             "Invalid withdraw proof"
@@ -160,14 +137,7 @@ contract NFTBlender is
 
         _processWithdrawNft(_tokenAddrs, _tokenId, _recipient, isERC721);
 
-        emit NFTWithdrawn(
-            _nullifierHash,
-            _recipient,
-            _tokenAddrs,
-            _tokenId,
-            _fee,
-            isERC721
-        );
+        emit NFTWithdrawn(_nullifierHash, _recipient, _tokenAddrs, _tokenId, _fee, isERC721);
     }
 
     function _processWithdrawNft(
@@ -176,20 +146,8 @@ contract NFTBlender is
         address _receipient,
         bool isERC721
     ) internal {
-        if (isERC721)
-            IERC721(_tokenAddrs).safeTransferFrom(
-                address(this),
-                _receipient,
-                _tokenId
-            );
-        else
-            IERC1155(_tokenAddrs).safeTransferFrom(
-                address(this),
-                _receipient,
-                _tokenId,
-                1,
-                ""
-            );
+        if (isERC721) IERC721(_tokenAddrs).safeTransferFrom(address(this), _receipient, _tokenId);
+        else IERC1155(_tokenAddrs).safeTransferFrom(address(this), _receipient, _tokenId, 1, "");
     }
 
     /** @dev whether a note is already spent */
@@ -198,11 +156,7 @@ contract NFTBlender is
     }
 
     /** @dev whether an array of notes is already spent */
-    function isSpentArray(bytes32[] calldata _nullifierHashes)
-        external
-        view
-        returns (bool[] memory spent)
-    {
+    function isSpentArray(bytes32[] calldata _nullifierHashes) external view returns (bool[] memory spent) {
         spent = new bool[](_nullifierHashes.length);
         for (uint256 i = 0; i < _nullifierHashes.length; i++) {
             if (isSpent(_nullifierHashes[i])) {
@@ -240,15 +194,7 @@ contract NFTBlender is
         return this.onERC1155BatchReceived.selector;
     }
 
-    function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        virtual
-        override(IERC165)
-        returns (bool)
-    {
-        return
-            interfaceId == type(IERC1155Receiver).interfaceId ||
-            interfaceId == type(IERC721Receiver).interfaceId;
+    function supportsInterface(bytes4 interfaceId) public view virtual override(IERC165) returns (bool) {
+        return interfaceId == type(IERC1155Receiver).interfaceId || interfaceId == type(IERC721Receiver).interfaceId;
     }
 }

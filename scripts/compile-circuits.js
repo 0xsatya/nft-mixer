@@ -16,7 +16,7 @@ async function main() {
   const contractPath = './contracts';
   const INPUT = `${CIRCUIT}-input`;
   const solidityVersion = config.solidity.version;
-  const toBuild = false;
+  const toBuild = true;
 
   await exec(`npx mkdirp ${PATH}/build && npx mkdirp ${PATH}/output && npx mkdirp ${PATH}/solidity`);
 
@@ -30,7 +30,7 @@ async function main() {
       await download(url, `${PATH}/tau/`);
     }
 
-    logger.log(`circom ${buildPath}/${CIRCUIT}.circom --r1cs --wasm --sym --output ./${PATH}/build`);
+    logger.log(`circom2 ${buildPath}/${CIRCUIT}.circom --r1cs --wasm --sym --output ./${PATH}/build`);
 
     logger.log('----------- compiling circuit --------');
     await exec(`circom2 ${buildPath}/${CIRCUIT}.circom --r1cs --wasm --sym --output ./${PATH}/build`);
@@ -83,6 +83,7 @@ async function main() {
     fs.writeFileSync(`${PATH}/output/proof.json`, JSON.stringify(proof), 'utf-8');
     fs.writeFileSync(`${PATH}/output/public.json`, JSON.stringify(publicSignals), 'utf-8');
   }
+
   logger.log('-----------verify proof-----------');
   const verificationResult = await groth16.verify(
     JSON.parse(fs.readFileSync(`${PATH}/output/verification_key.json`, 'utf8')),

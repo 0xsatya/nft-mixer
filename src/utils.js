@@ -8,6 +8,7 @@ const { poseidon } = require('circomlibjs');
 
 const poseidonHash = (items) => BigNumber.from(poseidon(items).toString());
 const poseidonHash2 = (a, b) => poseidonHash([a, b]);
+const poseidonHash3 = (a, b, c) => poseidonHash([a, b, c]);
 
 const FIELD_SIZE = BigNumber.from(
   '21888242871839275222246405745257275088548364400416034343698204186575808495617',
@@ -118,6 +119,7 @@ module.exports = {
   toBuffer,
   poseidonHash,
   poseidonHash2,
+  poseidonHash3,
   getExtDataHash,
   shuffle,
   getSignerFromAddress,
