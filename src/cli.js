@@ -49,6 +49,7 @@ let provider,
   netId,
   hasher2,
   hasher3,
+  verifier,
   isERC721;
 let tokenId = 1;
 let MERKLE_TREE_HEIGHT, ETH_AMOUNT, TOKEN_AMOUNT, PRIVATE_KEY;
@@ -61,6 +62,8 @@ const ZERO_VALUE = '137024985239538949070018579734044262036673518941909390904655
 const inBrowser = typeof window !== 'undefined';
 let isLocalRPC = false;
 const circutPath = path.join(__dirname, '/../circuit-build-nftMixer/output');
+const circutPath1 = path.join(__dirname, '/../circuit-build-nftMixer');
+
 // const circutPath = '/circuit-build-nftMixer/output';
 
 const artifactContractPath = path.join(__dirname, '/../artifacts/contracts');
@@ -129,7 +132,7 @@ async function deployBlender() {
   const input2 = '403582410511719803810147802798835900462401609230';
   const input3 = '1';
 
-  const verifier = await deployContract('Verifier'); // Verifier contract created after building circuit.
+  verifier = await deployContract('Verifier'); // Verifier contract created after building circuit.
   console.log('🚀 ~ verifier', verifier.address, verifier);
   blender = await deployContract('NFTBlender', [
     verifier.address,
@@ -430,12 +433,22 @@ async function generateProof({
   // const proofData = await websnarkUtils.genWitnessAndProve(groth16, input, circuit, proving_key);
   // const { proof } = websnarkUtils.toSolidityInput(proofData);
 
-  const { proof, publicSignals } = await groth16.prove(
-    circutPath + '/nftMixer_final.zkey',
-    circutPath + '/nftMixer.wtns',
-  );
-  console.timeEnd('Proof time');
-  console.log('proof', proof, publicSignals);
+  // const { proof, publicSignals } = await groth16.prove(
+  //   circutPath + '/nftMixer_final.zkey',
+  //   circutPath + '/nftMixer.wtns',
+  // );
+
+  // console.timeEnd('Proof time');
+  // console.log('proof', proof, publicSignals);
+  // const wasmPath = circutPath + '/nftMixer.wasm';
+  const wasmPath = circutPath1 + '/build/nftMixer_js/nftMixer.wasm';
+  const zkeyPath = circutPath + '/nftMixer_final.zkey';
+
+  console.log('🚀 =>===============');
+  const dataResult = await exportCallDataGroth16(toObject(input), wasmPath, zkeyPath);
+  let verResult = await verifier.verifyProof(dataResult.a, dataResult.b, dataResult.c, dataResult.Input);
+  console.log('🚀 => verResult', verResult);
+  console.log('🚀 =>===============');
 
   // const verificationResult = await groth16.verify(
   //   JSON.parse(fs.readFileSync(`${circutPath}/verification_key.json`, 'utf8')),
@@ -464,6 +477,30 @@ async function generateProof({
   console.log('args', args);
 
   return { proof, args };
+}
+
+async function exportCallDataGroth16(input, wasmPath, zkeyPath) {
+  const { proof: _proof, publicSignals: _publicSignals } = await groth16.prove(input, wasmPath, zkeyPath);
+  const calldata = await groth16.exportSolidityCallData(_proof, _publicSignals);
+
+  const argv = calldata
+    .replace(/["[\]\s]/g, '')
+    .split(',')
+    .map((x) => BigInt(x).toString());
+
+  const a = [argv[0], argv[1]];
+  const b = [
+    [argv[2], argv[3]],
+    [argv[4], argv[5]],
+  ];
+  const c = [argv[6], argv[7]];
+  const Input = [];
+
+  for (let i = 8; i < argv.length; i++) {
+    Input.push(argv[i]);
+  }
+
+  return { a, b, c, Input };
 }
 
 function getSolidityProof(proof) {
