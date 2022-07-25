@@ -99,7 +99,13 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
             proof,
             (uint256[2], uint256[2], uint256[2], uint256[2])
         );
-        r = verifier.verifyProof(a, [b1, b2], c, _input);
+        console.log("parseProof ~ a", a[0], a[1]);
+        console.log("parseProof ~ b1", b1[0], b1[1]);
+        console.log("parseProof ~ b2", b2[0], b2[1]);
+        console.log("parseProof ~ c", c[0], c[1]);
+
+        r = verifier.verifyProof(a, [[b1[1], b1[0]], [b2[1], b2[0]]], c, _input);
+        console.log("Blender Poof Verfication Result", r);
     }
 
     function withdrawNft(
