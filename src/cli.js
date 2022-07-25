@@ -35,6 +35,8 @@ const fetch = (url) => import('node-fetch').then(({ default: fetch }) => fetch(u
 let provider,
   signer,
   senderAccount,
+  account2,
+  account3,
   chainId,
   web3,
   blender,
@@ -102,7 +104,7 @@ async function setupAccount() {
   // console.log('🚀 ~ chainId', chainId);
   PRIVATE_KEY = process.env.PRIVATE_KEY;
   if (PRIVATE_KEY) {
-    [senderAccount] = await ethers.getSigners();
+    [senderAccount, account2, account3] = await ethers.getSigners();
     signer = senderAccount;
     console.log('🚀 ~ senderAccount', senderAccount.address);
   } else {
@@ -185,11 +187,8 @@ async function deposit({ nftAdd, tokenId }) {
     tokenAddr: BigInt(nftAdd),
     tokenId: BigInt(tokenId),
   });
-
   const note = toHex(deposit.preimage, 124);
-
   const noteString = `blender-${nftAdd}-${tokenId}-${netId}-${note}`;
-
   console.log('🚀🚀🚀🚀🚀 Submitting deposit transaction to Blender Contract');
   const tx = await blender
     .connect(senderAccount)
@@ -198,6 +197,35 @@ async function deposit({ nftAdd, tokenId }) {
   console.log('🚀🚀🚀🚀🚀 DEPOSIT NFT TO BLENDER  SUCCESSFUL :');
   console.log(`NOTE STRING CREATED: ${noteString}`);
   return noteString;
+}
+
+// transfer NFT ownership
+async function transferNftOwnership({
+  deposit,
+  recipient,
+  transferAccount,
+  newCommData,
+  relayerURL = '0',
+  refund = '0',
+  fee = '0',
+}) {
+  let relayer = 0;
+  let isWithdraw = false;
+  console.log('GENERATING SNARK PROOF...');
+  const { proofData, args } = await generateProof({ deposit, recipient, isWithdraw });
+  console.log('newCommData :', newCommData);
+  console.log('🚀🚀🚀🚀🚀 SUBMITTING WITHDRAW TXN...');
+  let solProof = getSolidityProof(proofData.proof);
+
+  console.log('args, newComm.commitment :', args, newCommData.commitment);
+
+  let tx = await blender
+    .connect(transferAccount)
+    .withdrawNft(solProof, ...args, toHex(newCommData.commitment), {
+      gasLimit: 50000000,
+    });
+  let res = await tx.wait();
+  console.log('----- Withdraw tx Done -----');
 }
 
 /**
@@ -244,7 +272,7 @@ async function buildMerkleTree({ blenderContract }) {
   const fromBlock = await ethers.provider.getBlockNumber();
   const events = await blender.queryFilter(filter, 0, fromBlock);
 
-  // console.log('buildMerkleTree ~ events', events);
+  console.log('buildMerkleTree ~ events', events);
 
   const leaves = events
     .sort((a, b) => a.args.leafIndex - b.args.leafIndex)
@@ -280,6 +308,8 @@ function toObject(input) {
 async function generateProof({
   deposit,
   recipient,
+  isWithdraw = false,
+  isERC721 = true,
   relayerAddress = 0,
   fee = 0,
   refund = 0,
@@ -334,8 +364,8 @@ async function generateProof({
     input.nullifier,
     toHex(input.nftAddress, 20),
     input.tokenId,
-    true,
-    true,
+    isERC721,
+    isWithdraw,
   ];
   // console.log('args', args);
 
@@ -385,14 +415,15 @@ function getSolidityProof(proof) {
  * @param noteString Note to withdraw
  * @param recipient Recipient address
  */
-async function withdraw({ deposit, recipient, relayerURL = '0', refund = '0', fee = '0' }) {
+async function withdraw({ deposit, recipient, withdrawAccount, relayerURL = '0', refund = '0', fee = '0' }) {
   let relayer = 0;
+  let isWithdraw = true;
   console.log('GENERATING SNARK PROOF...');
-  const { proofData, args } = await generateProof({ deposit, recipient });
+  const { proofData, args } = await generateProof({ deposit, recipient, isWithdraw });
 
   console.log('🚀🚀🚀🚀🚀 SUBMITTING WITHDRAW TXN...');
   let solProof = getSolidityProof(proofData.proof);
-  let tx = await blender.connect(senderAccount).withdrawNft(solProof, ...args, {
+  let tx = await blender.connect(withdrawAccount).withdrawNft(solProof, ...args, {
     gasLimit: 50000000,
   });
   let res = await tx.wait();
@@ -666,21 +697,42 @@ async function main() {
 
         // console.log('🧨 nftAdd and tokenId :', nftAdd, tokenId);
         isERC721 = true;
+        console.log('🚀 🚀 🚀 🚀 🚀 🚀 🚀   DEPOSIT NFT  🚀 🚀 🚀 🚀 🚀 🚀 🚀 🚀 🚀 ');
 
         let noteString = await deposit({ nftAdd: nftAdd, tokenId: tokenId });
         let nftOwner1 = await getNftTokenOwner(tokenId, isERC721);
         let { tokenAddr, tokenId: nftId, netId, deposit: depositObj } = parseNote(noteString);
 
+        console.log('🚀 🚀 🚀 🚀 🚀 🚀 🚀   TRANSFER NFT OWNERSHIP 🚀 🚀 🚀 🚀 🚀 🚀 🚀 🚀 🚀 ');
+
+        // transfer NFT onchain in Blender contract
+        const transferNftData = createDeposit({
+          nullifier: rbigint(31),
+          secret: rbigint(31),
+          tokenAddr: BigInt(nftAdd),
+          tokenId: BigInt(tokenId),
+        });
+        // call contract to transfer NFT to account2.address from senderAccount.address
+        await transferNftOwnership({
+          deposit: depositObj,
+          recipient: account2.address,
+          transferAccount: account2,
+          newCommData: transferNftData,
+        });
+        console.log('🚀 🚀 🚀 🚀 🚀 🚀 🚀   WITHDRAW NFT 🚀 🚀 🚀 🚀 🚀 🚀 🚀 🚀 🚀 ');
         const recipient = senderAccount.address;
         // console.log('.action ~ recipient', recipient);
         await withdraw({
-          deposit: depositObj,
+          deposit: transferNftData,
           recipient,
+          withdrawAccount: account3,
         });
         let nftOwner2 = await getNftTokenOwner(tokenId, isERC721);
         console.log('🚀 => .action => nftOwner1 after deposit - to be blenderACct:', nftOwner1);
-        console.log('🚀 => .action => nftOwner2 after withdraw - to be senderAcct:', nftOwner2);
-        console.log('Account Address :', senderAccount.address);
+        console.log('🚀 => .action => nftOwner2 after withdraw - to be account2:', nftOwner2);
+        console.log('Sender account Address :', senderAccount.address);
+        console.log('Account2 Address :', account2.address);
+        console.log('Account3 Address :', account3.address);
         console.log('Blender contract address :', blender.address);
       });
     program

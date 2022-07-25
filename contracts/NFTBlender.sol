@@ -40,8 +40,7 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
         uint256 timestamp
     );
     event NFTWithdrawn(bytes32 nullifierHash, address recipient, address token, uint256 tokenId, uint256 value, bool isERC721);
-
-    event NFTTransferred(bool resutl);
+    event TransferOwnership(bytes32 _commitment, uint32 insertedIndex, uint256 timestamp);
 
     constructor(
         IVerifier _verifier,
@@ -116,24 +115,13 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
         address _tokenAddrs,
         uint256 _tokenId,
         bool isERC721,
-        bool isWithdraw // if true, nft is withdrwan to address, else owenership transferred
+        bool isWithdraw, // if true, nft is withdrwan to address, else owenership transferred
+        bytes32 _commitment
     ) external {
-        //if amount is deposited for the nft then only allow nft to withdraw
-        /** It checks following
-            1. Amount ==0 or it should be depposited
-            2. msg.sender should be nft receipient.
-            3. nullifier should be unused.
-         */
         // console.log("------------------------------------");
         require(!nullifierHashes[bytes32(_nullifierHash)], "The note has been already spent");
         require(isKnownRoot(bytes32(_root)), "Cannot find your merkle root"); // Make sure to use a recent one
-        if (isWithdraw) {
-            uint256[3] memory input;
-            input[0] = uint256(_nullifier);
-            input[1] = uint256(uint160(_tokenAddrs));
-            input[2] = uint256(_tokenId);
-            require(_nullifierHash == (hasher3.poseidon(input)), "nullifier Hash mismatch");
-        }
+
         uint256[4] memory _input;
         _input[0] = uint256(_root);
         _input[1] = uint256(_nullifierHash);
@@ -151,9 +139,21 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
 
         nullifierHashes[bytes32(_nullifierHash)] = true;
 
-        _processWithdrawNft(_tokenAddrs, _tokenId, _recipient, isERC721);
-
-        emit NFTWithdrawn(bytes32(_nullifierHash), _recipient, _tokenAddrs, _tokenId, _fee, isERC721);
+        if (isWithdraw) {
+            uint256[3] memory input;
+            input[0] = uint256(_nullifier);
+            input[1] = uint256(uint160(_tokenAddrs));
+            input[2] = uint256(_tokenId);
+            require(_nullifierHash == (hasher3.poseidon(input)), "nullifier Hash mismatch");
+            _processWithdrawNft(_tokenAddrs, _tokenId, _recipient, isERC721);
+            emit NFTWithdrawn(bytes32(_nullifierHash), _recipient, _tokenAddrs, _tokenId, _fee, isERC721);
+        } else {
+            require(!commitments[_commitment], "The commitment has been submitted");
+            uint32 insertedIndex = _insert(_commitment, bytes32(ZERO_VALUE));
+            commitments[_commitment] = true;
+            emit TransferOwnership(_commitment, insertedIndex, block.timestamp);
+            emit NFTDeposited(_tokenAddrs, _tokenId, 0, isERC721, _commitment, insertedIndex, block.timestamp);
+        }
     }
 
     function _processWithdrawNft(
