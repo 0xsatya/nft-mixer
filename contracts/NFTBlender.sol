@@ -61,14 +61,11 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
         uint256 _amount,
         bool _isERC721
     ) external {
-        // console.log("contract deposit started... :");
         require(!commitments[_commitment], "The commitment has been submitted");
 
         uint32 insertedIndex = _insert(_commitment, bytes32(ZERO_VALUE));
         commitments[_commitment] = true;
         _processDeposit(_isERC721, _token, _tokenId);
-        // console.log("_commitment", _commitment);
-        // console.log("insertedIndex", insertedIndex);
         emit NFTDeposited(_token, _tokenId, _amount, _isERC721, _commitment, insertedIndex, block.timestamp);
     }
 
@@ -99,13 +96,13 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
             proof,
             (uint256[2], uint256[2], uint256[2], uint256[2])
         );
-        console.log("parseProof ~ a", a[0], a[1]);
-        console.log("parseProof ~ b1", b1[0], b1[1]);
-        console.log("parseProof ~ b2", b2[0], b2[1]);
-        console.log("parseProof ~ c", c[0], c[1]);
+        // console.log("parseProof ~ a", a[0], a[1]);
+        // console.log("parseProof ~ b1", b1[0], b1[1]);
+        // console.log("parseProof ~ b2", b2[0], b2[1]);
+        // console.log("parseProof ~ c", c[0], c[1]);
 
         r = verifier.verifyProof(a, [[b1[1], b1[0]], [b2[1], b2[0]]], c, _input);
-        console.log("Blender Poof Verfication Result", r);
+        // console.log("Blender Poof Verfication Result", r);
     }
 
     function withdrawNft(
@@ -127,7 +124,7 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
             2. msg.sender should be nft receipient.
             3. nullifier should be unused.
          */
-        console.log("------------------------------------");
+        // console.log("------------------------------------");
         require(!nullifierHashes[bytes32(_nullifierHash)], "The note has been already spent");
         require(isKnownRoot(bytes32(_root)), "Cannot find your merkle root"); // Make sure to use a recent one
         if (isWithdraw) {
@@ -143,7 +140,7 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
         _input[2] = uint256(uint160(_tokenAddrs));
         _input[3] = _tokenId;
 
-        console.log(_input[0], _input[1], _input[2], _input[3]);
+        // console.log(_input[0], _input[1], _input[2], _input[3]);
 
         // uint256[8] memory p = abi.decode(_proof, (uint256[8]));
         bool result = parseProof(_proof, _input);

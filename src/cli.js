@@ -150,6 +150,7 @@ async function setupTestToken() {
   console.log('-----Miniting a Test Token to sender account-----');
   await (await erc721Mock.connect(senderAccount).mint(senderAccount.address, tokenId)).wait();
 
+  console.log('current NFT owner :', await getNftTokenOwner(tokenId, true, 0x0));
   console.log('-----Approving Token To Blender Contract-----');
   await (await erc721Mock.connect(senderAccount).approve(blender.address, tokenId)).wait();
   console.log('---- setupToken Successful -----');
@@ -421,48 +422,17 @@ function getSolidityProof(proof) {
  * @param recipient Recipient address
  */
 async function withdraw({ deposit, recipient, relayerURL = '0', refund = '0', fee = '0' }) {
-  relayerURL = false;
-  if (relayerURL) {
-    const relayerAddress = utils.computeAddress('0');
-    const fee = 0;
-    const { proofData, args } = await generateProof({
-      deposit,
-      recipient,
-      relayerAddress,
-      fee,
-      refund,
-    });
-
-    console.log('Sending withdraw transaction through relay');
-    try {
-      const relay = await blender.withdraw();
-
-      const receipt = await waitForTxReceipt({ txHash: relay.data.txHash });
-      console.log('Transaction mined in block', receipt.blockNumber);
-    } catch (e) {
-      if (e.response) {
-        console.error(e.response.data.error);
-      } else {
-        console.error(e.message);
-      }
-    }
-  } else {
-    let relayer = 0;
-
-    const { proofData, args } = await generateProof({ deposit, recipient });
-
-    console.log('Submitting withdraw transaction');
-
-    let solProof = getSolidityProof(proofData.proof);
-    console.log('🚀 => withdraw => solProof', solProof);
-
-    let tx = await blender.connect(senderAccount).withdrawNft(solProof, ...args, {
-      gasLimit: 50000000,
-    });
-    let res = await tx.wait();
-    console.log('🚀 => withdraw => res', res);
-  }
-  console.log('Done');
+  let relayer = 0;
+  const { proofData, args } = await generateProof({ deposit, recipient });
+  console.log('Submitting withdraw transaction');
+  let solProof = getSolidityProof(proofData.proof);
+  // console.log('🚀 => withdraw => solProof', solProof);
+  let tx = await blender.connect(senderAccount).withdrawNft(solProof, ...args, {
+    gasLimit: 50000000,
+  });
+  let res = await tx.wait();
+  // console.log('🚀 => withdraw => res', res);
+  console.log('Withdraw Done');
 }
 
 function fromDecimals({ amount, decimals }) {
@@ -686,6 +656,16 @@ async function loadWithdrawalData({ amount, currency, deposit }) {
   }
 }
 
+async function getNftTokenOwner(tokenId, isERC721, accountAdd = 0x0) {
+  try {
+    if (isERC721) return await erc721Mock.ownerOf(tokenId);
+    else return await erc1155Mock.balanceOf(accountAdd, tokenId);
+  } catch (error) {
+    console.log('ERROR :', error);
+    return false;
+  }
+}
+
 /**
  * Init web3, contracts, and snark
  */
@@ -720,26 +700,31 @@ async function main() {
         await deployBlender();
         let { nftAdd, tokenId } = await setupTestToken();
 
-        console.log('🧨 nftAdd and tokenId :', nftAdd, tokenId);
+        // console.log('🧨 nftAdd and tokenId :', nftAdd, tokenId);
         isERC721 = true;
 
-        console.log('🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀');
+        // console.log('🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀');
 
         let noteString = await deposit({ nftAdd: nftAdd, tokenId: tokenId });
+        let nftOwner1 = await getNftTokenOwner(tokenId, isERC721);
 
-        console.log('🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀');
+        // console.log('🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀');
 
         let { tokenAddr, tokenId: nftId, netId, deposit: depositObj } = parseNote(noteString);
 
-        console.log('🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀');
+        // console.log('🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀');
 
         const recipient = senderAccount.address;
-        console.log('.action ~ recipient', recipient);
+        // console.log('.action ~ recipient', recipient);
         await withdraw({
           deposit: depositObj,
-
           recipient,
         });
+        let nftOwner2 = await getNftTokenOwner(tokenId, isERC721);
+        // console.log('🚀 => .action => nftOwner1 after deposit - to be blenderACct:', nftOwner1);
+        // console.log('🚀 => .action => nftOwner2 after withdraw - to be senderAcct:', nftOwner2);
+        // console.log('Account Address :', senderAccount.address);
+        // console.log('Blender contract address :', blender.address);
       });
     program
       .command('withdraw <note> <recipient> [ETH_purchase]')
