@@ -733,9 +733,7 @@ async function main() {
 
         console.log('🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀');
 
-        const randomSigner = ethers.Wallet.createRandom();
-        console.log('.action ~ randomSigner', randomSigner);
-        const recipient = randomSigner.address;
+        const recipient = senderAccount.address;
         console.log('.action ~ recipient', recipient);
         await withdraw({
           deposit: depositObj,
