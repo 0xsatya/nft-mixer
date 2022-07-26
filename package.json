@@ -12,7 +12,7 @@
     "test": "hardhat test",
     "test:report-gas": "REPORT_GAS=true hardhat test",
     "test:coverage": "hardhat coverage",
-    "test:cli": "hardhat compile && node src/cli.js deposit"
+    "test:cli": "hardhat compile && node src/cli.js test"
   },
   "devDependencies": {},
   "config": {

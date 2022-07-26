@@ -62,9 +62,10 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
     ) external {
         require(!commitments[_commitment], "The commitment has been submitted");
 
-        uint32 insertedIndex = _insert(_commitment, bytes32(ZERO_VALUE));
+        uint32 insertedIndex = _insert(_commitment);
         commitments[_commitment] = true;
         _processDeposit(_isERC721, _token, _tokenId);
+
         emit NFTDeposited(_token, _tokenId, _amount, _isERC721, _commitment, insertedIndex, block.timestamp);
     }
 
@@ -138,6 +139,7 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
         // require(verifier.verifyProof(a, [b1, b2], c, _input), "Invalid withdraw proof");
 
         nullifierHashes[bytes32(_nullifierHash)] = true;
+        console.log(uint256(_commitment));
 
         if (isWithdraw) {
             uint256[3] memory input;
@@ -149,7 +151,7 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
             emit NFTWithdrawn(bytes32(_nullifierHash), _recipient, _tokenAddrs, _tokenId, _fee, isERC721);
         } else {
             require(!commitments[_commitment], "The commitment has been submitted");
-            uint32 insertedIndex = _insert(_commitment, bytes32(ZERO_VALUE));
+            uint32 insertedIndex = _insert(_commitment);
             commitments[_commitment] = true;
             emit TransferOwnership(_commitment, insertedIndex, block.timestamp);
             emit NFTDeposited(_tokenAddrs, _tokenId, 0, isERC721, _commitment, insertedIndex, block.timestamp);
