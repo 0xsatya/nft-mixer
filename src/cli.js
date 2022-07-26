@@ -280,7 +280,7 @@ async function buildMerkleTree({ blenderContract }) {
   const latestBlcok = await ethers.provider.getBlockNumber();
   const events = await blender.queryFilter(filter, 0, latestBlcok);
 
-  console.log('buildMerkleTree ~ events', events);
+  // console.log('buildMerkleTree ~ events', events);
 
   const leaves = events
     .sort((a, b) => a.args.leafIndex - b.args.leafIndex)
@@ -431,7 +431,7 @@ async function withdraw({ deposit, recipient, withdrawAccount, relayerURL = '0',
 
   console.log('🚀🚀🚀🚀🚀 SUBMITTING WITHDRAW TXN...');
   let solProof = getSolidityProof(proofData.proof);
-  let tx = await blender.connect(withdrawAccount).withdrawNft(solProof, ...args, {
+  let tx = await blender.connect(withdrawAccount).withdrawNft(solProof, ...args, toHex(0), {
     gasLimit: 50000000,
   });
   let res = await tx.wait();
@@ -826,7 +826,7 @@ async function main() {
         });
 
         console.log('🚀 🚀 🚀 🚀 🚀 🚀 🚀   WITHDRAW NFT 🚀 🚀 🚀 🚀 🚀 🚀 🚀 🚀 🚀 ');
-        let parseNoteData = parseNote(noteString);
+        let parseNoteData = parseNote(newNoteString);
 
         const recipient = account3.address;
         // console.log('.action ~ recipient', recipient);
