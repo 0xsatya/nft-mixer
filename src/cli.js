@@ -28,6 +28,7 @@ const {
   deployContract,
   contractAt,
   getSignerFromAddress,
+  getTokenIdfromTxHash,
 } = require('./utils');
 
 const fetch = (url) => import('node-fetch').then(({ default: fetch }) => fetch(url));
@@ -142,7 +143,9 @@ async function setupTestToken() {
   console.log('🚀 ~ ERC1155Mock address:', erc1155Mock.address);
 
   console.log('-----Miniting a Test Token to sender account-----');
-  await (await erc721Mock.connect(senderAccount).mint(senderAccount.address, tokenId)).wait();
+  let tx = await (await erc721Mock.connect(senderAccount).mint(senderAccount.address, tokenId)).wait();
+  // console.log('setupTestToken ~ tx', tx.transactionHash);
+  await getTokenIdfromTxHash(tx.transactionHash);
 
   console.log('current NFT owner :', await getNftTokenOwner(tokenId, true, 0x0));
   console.log('-----Approving Token To Blender Contract-----');
