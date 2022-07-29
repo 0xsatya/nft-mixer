@@ -12,8 +12,6 @@ import "./MerkleTreeWithHistory.sol";
 import "hardhat/console.sol";
 
 interface IVerifier {
-    // function verifyProof(bytes memory _proof, uint256[4] memory _input) external returns (bool);
-
     function verifyProof(
         uint256[2] memory a,
         uint256[2][2] memory b,
@@ -48,7 +46,6 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
         address _hasher3,
         uint32 _merkleTreeHeight
     ) MerkleTreeWithHistory(_merkleTreeHeight, _hasher) {
-        // console.log(" contract constructor......");
         verifier = _verifier;
         hasher3 = IHasher3(_hasher3);
     }
@@ -61,12 +58,16 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
         bool _isERC721
     ) external {
         require(!commitments[_commitment], "The commitment has been submitted");
-
-        uint32 insertedIndex = _insert(_commitment);
-        commitments[_commitment] = true;
+        uint32 _insertedIndex = insertCommitment(_commitment);
         _processDeposit(_isERC721, _token, _tokenId);
 
-        emit NFTDeposited(_token, _tokenId, _amount, _isERC721, _commitment, insertedIndex, block.timestamp);
+        emit NFTDeposited(_token, _tokenId, _amount, _isERC721, _commitment, _insertedIndex, block.timestamp);
+    }
+
+    function insertCommitment(bytes32 _commitment) internal returns (uint32 _insertedIndex) {
+        _insertedIndex = _insert(_commitment);
+        commitments[_commitment] = true;
+        return _insertedIndex;
     }
 
     function _processDeposit(
@@ -96,13 +97,8 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
             proof,
             (uint256[2], uint256[2], uint256[2], uint256[2])
         );
-        // console.log("parseProof ~ a", a[0], a[1]);
-        // console.log("parseProof ~ b1", b1[0], b1[1]);
-        // console.log("parseProof ~ b2", b2[0], b2[1]);
-        // console.log("parseProof ~ c", c[0], c[1]);
 
         r = verifier.verifyProof(a, [[b1[1], b1[0]], [b2[1], b2[0]]], c, _input);
-        // console.log("Blender Poof Verfication Result", r);
     }
 
     function withdrawNft(
@@ -119,7 +115,6 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
         bool isWithdraw, // if true, nft is withdrwan to address, else owenership transferred
         bytes32 _commitment
     ) external {
-        // console.log("------------------------------------");
         require(!nullifierHashes[bytes32(_nullifierHash)], "The note has been already spent");
         require(isKnownRoot(bytes32(_root)), "Cannot find your merkle root"); // Make sure to use a recent one
 
@@ -129,14 +124,9 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
         _input[2] = uint256(uint160(_tokenAddrs));
         _input[3] = _tokenId;
 
-        // console.log(_input[0], _input[1], _input[2], _input[3]);
-
-        // uint256[8] memory p = abi.decode(_proof, (uint256[8]));
         bool result = parseProof(_proof, _input);
 
-        // console.log(a[0], a[1]);
         require(result, "Invalid withdraw proof");
-        // require(verifier.verifyProof(a, [b1, b2], c, _input), "Invalid withdraw proof");
 
         nullifierHashes[bytes32(_nullifierHash)] = true;
         console.log(uint256(_commitment));
@@ -151,10 +141,9 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
             emit NFTWithdrawn(bytes32(_nullifierHash), _recipient, _tokenAddrs, _tokenId, _fee, isERC721);
         } else {
             require(!commitments[_commitment], "The commitment has been submitted");
-            uint32 insertedIndex = _insert(_commitment);
-            commitments[_commitment] = true;
-            emit TransferOwnership(_commitment, insertedIndex, block.timestamp);
-            emit NFTDeposited(_tokenAddrs, _tokenId, 0, isERC721, _commitment, insertedIndex, block.timestamp);
+            uint32 _insertedIndex = insertCommitment(_commitment);
+            emit TransferOwnership(_commitment, _insertedIndex, block.timestamp);
+            emit NFTDeposited(_tokenAddrs, _tokenId, 0, isERC721, _commitment, _insertedIndex, block.timestamp);
         }
     }
 

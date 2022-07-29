@@ -1,157 +1,133 @@
 require('dotenv').config();
 const { ethers } = require('hardhat');
 const { BigNumber } = ethers;
-const { utils } = ethers;
 const fs = require('fs');
 const path = require('path');
-const axios = require('axios');
 const assert = require('assert');
-const snarkjs = require('snarkjs');
 const { zKey, wtns, groth16, r1cs } = require('snarkjs');
-
 const bigIntUtils = require('ffjavascript').utils;
-
 const crypto = require('crypto');
 const circomlibjs = require('circomlibjs');
-const bigInt = snarkjs.bigInt;
 const { MerkleTree } = require('fixed-merkle-tree');
-
-const websnarkUtils = require('wasmsnark/src/utils');
-const { toWei, fromWei, toBN, BN } = require('web3-utils');
-
 const program = require('commander');
-const {
-  toFixedHex,
-  poseidonHash,
-  poseidonHash2,
-  poseidonHash3,
-  deployContract,
-  contractAt,
-  getSignerFromAddress,
-  getTokenIdfromTxHash,
-} = require('./utils');
 
-const fetch = (url) => import('node-fetch').then(({ default: fetch }) => fetch(url));
+const { logMessage } = require('../utils/general-utils');
+const params = require('../utils/params');
+const convert = require('../utils/conversion-utils');
+const etherUtils = require('../utils/ether-uitls');
+const snarkUtils = require('../utils/snark-utils');
 
-let provider,
-  signer,
-  senderAccount,
-  account2,
-  account3,
-  chainId,
-  web3,
-  blender,
-  circuit,
-  provingKey,
-  verificationKey,
-  erc721Mock,
-  erc1155Mock,
-  netId,
-  hasher2,
-  hasher3,
-  verifier,
-  isERC721;
+// const {
+//   toFixedHex,
+//   poseidonHash,
+//   poseidonHash2,
+//   poseidonHash3,
+//   deployContract,
+//   contractAt,
+//   getSignerFromAddress,
+//   getTokenIdfromTxHash,
+// } = require('./utils');
+
+// const fetch = (url) => import('node-fetch').then(({ default: fetch }) => fetch(url));
+
+// let provider, signer, senderAccount, account2, account3, chainId, netId;
+let blender, erc721Mock, erc1155Mock, hasher2, hasher3, verifier;
+let isERC721;
 let tokenId = 1;
-let MERKLE_TREE_HEIGHT, ETH_AMOUNT, TOKEN_AMOUNT, PRIVATE_KEY;
+let MERKLE_TREE_HEIGHT, PRIVATE_KEY;
 
 MERKLE_TREE_HEIGHT = process.env.MERKLE_TREE_HEIGHT || 20;
 
-const ZERO_VALUE = '1370249852395389490700185797340442620366735189419093909046557908847258978065';
+const ZERO_VALUE = params.ZERO_VALUE;
 
 /** Whether we are in a browser or node.js */
 const inBrowser = typeof window !== 'undefined';
-let isLocalRPC = false;
-const circutPath = path.join(__dirname, '/../circuit-build-nftMixer/output');
-const circutPath1 = path.join(__dirname, '/../circuit-build-nftMixer');
+// let isLocalRPC = false;
+// const circutPath = path.join(__dirname, '/../circuit-build-nftMixer/output');
+// const circutPath1 = path.join(__dirname, '/../circuit-build-nftMixer');
 
-const artifactContractPath = path.join(__dirname, '/../artifacts/contracts');
+// const artifactContractPath = path.join(__dirname, '/../artifacts/contracts');
 
 /** Generate random number of specified byte length */
-const rbigint = (nbytes) => bigIntUtils.beBuff2int(crypto.randomBytes(nbytes));
+// const rbigint = (nbytes) => bigIntUtils.beBuff2int(crypto.randomBytes(nbytes));
 
 /** Compute pedersen hash */
-const pedersenHash = (data) => {
-  return circomlibjs.babyjub.unpackPoint(circomlibjs.pedersenHash.hash(data))[0];
-};
+// const pedersenHash = (data) => {
+//   return circomlibjs.babyjub.unpackPoint(circomlibjs.pedersenHash.hash(data))[0];
+// };
 
 /** BigNumber to hex string of specified length */
-function toHex(number, length = 32) {
-  const str = number instanceof Buffer ? number.toString('hex') : BigInt(number).toString(16);
+// function toHex(number, length = 32) {
+//   const str = number instanceof Buffer ? number.toString('hex') : BigInt(number).toString(16);
 
-  return '0x' + str.padStart(length * 2, '0');
-}
+//   return '0x' + str.padStart(length * 2, '0');
+// }
 
 /** Display ETH account balance */
-async function printETHBalance({ address, name }) {
-  console.log(`${name} ETH balance is`, web3.utils.fromWei(await web3.eth.getBalance(address)));
-}
+// async function printETHBalance({ address, name }) {
+//   console.log(`${name} ETH balance is`, web3.utils.fromWei(await web3.eth.getBalance(address)));
+// }
 
 /** Checks NFT Token owner */
-async function checkERC21Owner({ address, name, tokenAddress, tokenId, isERC721 }) {
-  if (isERC721) {
-    erc721Mock = await deployContract('ERC721Mock');
-    return address == (await erc721Mock.ownerOf(tokenId));
-  } else {
-    erc1155Mock = await deployContract('ERC1155Mock');
-    return await erc1155Mock.balanceOf(address, tokenId);
-  }
-}
-
+// async function checkERC21Owner({ address, name, tokenAddress, tokenId, isERC721 }) {
+//   if (isERC721) {
+//     erc721Mock = await deployContract('ERC721Mock');
+//     return address == (await erc721Mock.ownerOf(tokenId));
+//   } else {
+//     erc1155Mock = await deployContract('ERC1155Mock');
+//     return await erc1155Mock.balanceOf(address, tokenId);
+//   }
+// }
 async function setupAccount() {
-  console.log('-------Settingup Account from the private key-------');
-  provider = new ethers.getDefaultProvider();
-  chainId = (await provider.getNetwork()).chainId;
-  netId = chainId;
-  // console.log('🚀 ~ chainId', chainId);
-  PRIVATE_KEY = process.env.PRIVATE_KEY;
-  if (PRIVATE_KEY) {
-    [senderAccount, account2, account3] = await ethers.getSigners();
-    signer = senderAccount;
-    console.log('🚀 ~ senderAccount', senderAccount.address);
-  } else {
-    console.log('Warning! PRIVATE_KEY not found. Please provide PRIVATE_KEY in .env file if you deposit');
-  }
+  logMessage('Settingup Account from the private key', '➡️', 2);
+  const Accounts = await etherUtils.setupAccounts();
+  [senderAccount, account2, account3] = Accounts;
+  console.log('SenderAccount address', senderAccount.address);
+  console.log('Account2 address', account2.address);
+  console.log('Account3 address', account3.address);
 }
 
 async function deployBlender() {
+  logMessage('Deploying hashers, verifier, and Blender Contracts', '➡️', 2);
+
   require('../scripts/compileHasher');
   require('../scripts/compileHasher3');
-  hasher2 = await deployContract('Hasher');
-  console.log('🚀 ~ hasher2', hasher2.address);
-  hasher3 = await deployContract('Hasher3');
-  console.log('🚀 ~ hasher3', hasher3.address);
-
-  verifier = await deployContract('Verifier');
-  console.log('🚀 ~ verifier', verifier.address);
-  blender = await deployContract('NFTBlender', [
+  hasher2 = await etherUtils.deployContract('Hasher');
+  hasher3 = await etherUtils.deployContract('Hasher3');
+  verifier = await etherUtils.deployContract('Verifier');
+  blender = await etherUtils.deployContract('NFTBlender', [
     verifier.address,
     hasher2.address,
     hasher3.address,
     MERKLE_TREE_HEIGHT,
   ]);
-  console.log('🚀 ~ blender', blender.address);
 
-  // const hash3 = poseidonHash([input1, input2, input3]);
-  // const nullHash = await blender.poseidon3(input1, input2, input3);
+  console.log('🚀 ~ hasher2', hasher2.address);
+  console.log('🚀 ~ hasher3', hasher3.address);
+  console.log('🚀 ~ verifier', verifier.address);
+  console.log('🚀 ~ blender', blender.address);
 }
 
 async function setupTestToken() {
-  console.log('-----Deploying Mock NFT Contracts-----');
-  erc721Mock = await deployContract('ERC721Mock', ['Mock721', 'M721']);
-  erc1155Mock = await deployContract('ERC1155Mock', ['https://token-cdn-domain/']);
+  logMessage('Deploying Mock NFT Contracts', '➡️', 2);
+
+  erc721Mock = await etherUtils.deployContract('ERC721Mock', ['Mock721', 'M721']);
+  erc1155Mock = await etherUtils.deployContract('ERC1155Mock', ['https://token-cdn-domain/']);
+
   console.log('🚀 ~ ERC721Mock address:', erc721Mock.address);
   console.log('🚀 ~ ERC1155Mock address:', erc1155Mock.address);
 
-  console.log('-----Miniting a Test Token to sender account-----');
-  let tx = await (await erc721Mock.connect(senderAccount).mint(senderAccount.address, tokenId)).wait();
-  // console.log('setupTestToken ~ tx', tx.transactionHash);
-  await getTokenIdfromTxHash(tx.transactionHash);
+  logMessage('✅ Miniting a Test Token to sender account', '-.', 2);
 
-  console.log('current NFT owner :', await getNftTokenOwner(tokenId, true, 0x0));
-  console.log('-----Approving Token To Blender Contract-----');
+  let tx = await (await erc721Mock.connect(senderAccount).mint(senderAccount.address, tokenId)).wait();
+
+  console.log('current NFT owner :', await etherUtils.getNftTokenOwner(erc721Mock, tokenId, true, 0x0));
+
+  logMessage('✅ Approving Token To Blender Contract', '-.', 2);
   await (await erc721Mock.connect(senderAccount).approve(blender.address, tokenId)).wait();
 
-  console.log('---- setupToken Successful -----');
+  logMessage('✅ setupToken Successful', '', 0);
+  logMessage('', '-', 0);
   return { nftAdd: erc721Mock.address, tokenId: tokenId };
 }
 
@@ -662,15 +638,15 @@ async function loadWithdrawalData({ amount, currency, deposit }) {
   }
 }
 
-async function getNftTokenOwner(tokenId, isERC721, accountAdd = 0x0) {
-  try {
-    if (isERC721) return await erc721Mock.ownerOf(tokenId);
-    else return await erc1155Mock.balanceOf(accountAdd, tokenId);
-  } catch (error) {
-    console.log('ERROR :', error);
-    return false;
-  }
-}
+// async function getNftTokenOwner(tokenId, isERC721, accountAdd = 0x0) {
+//   try {
+//     if (isERC721) return await erc721Mock.ownerOf(tokenId);
+//     else return await erc1155Mock.balanceOf(accountAdd, tokenId);
+//   } catch (error) {
+//     console.log('ERROR :', error);
+//     return false;
+//   }
+// }
 
 /**
  * Init web3, contracts, and snark
