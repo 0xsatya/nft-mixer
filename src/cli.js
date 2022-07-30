@@ -117,49 +117,47 @@ async function setupTestToken() {
   console.log('🚀 ~ ERC721Mock address:', erc721Mock.address);
   console.log('🚀 ~ ERC1155Mock address:', erc1155Mock.address);
 
-  logMessage('✅ Miniting a Test Token to sender account', '-.', 2);
+  logMessage('✅ Miniting a Test Token to sender account', '- -', 2);
 
   let tx = await (await erc721Mock.connect(senderAccount).mint(senderAccount.address, tokenId)).wait();
 
-  console.log('current NFT owner :', await etherUtils.getNftTokenOwner(erc721Mock, tokenId, true, 0x0));
+  console.log('🚀 ~ current NFT owner :', await etherUtils.getNftTokenOwner(erc721Mock, tokenId, true, 0x0));
 
-  logMessage('✅ Approving Token To Blender Contract', '-.', 2);
+  logMessage('✅ Approving Token To Blender Contract', '- -', 2);
   await (await erc721Mock.connect(senderAccount).approve(blender.address, tokenId)).wait();
 
-  logMessage('✅ setupToken Successful', '', 0);
-  logMessage('', '-', 0);
+  logMessage('✅ setupToken Successful', '');
+  logMessage('', '--');
   return { nftAdd: erc721Mock.address, tokenId: tokenId };
 }
 
 /**
  * Create deposit object from secret and nullifier
  */
-function createDeposit({ nullifier, secret, tokenAddr, tokenId }) {
-  const deposit = { nullifier, secret, tokenAddr, tokenId };
+// function createDeposit({ nullifier, secret, tokenAddr, tokenId }) {
+//   const deposit = { nullifier, secret, tokenAddr, tokenId };
 
-  deposit.preimage = Buffer.concat([
-    bigIntUtils.beInt2Buff(deposit.nullifier, 31),
-    bigIntUtils.beInt2Buff(deposit.tokenAddr, 31),
-    bigIntUtils.beInt2Buff(deposit.tokenId, 31),
-    bigIntUtils.beInt2Buff(deposit.secret, 31),
-  ]);
+//   deposit.preimage = Buffer.concat([
+//     bigIntUtils.beInt2Buff(deposit.nullifier, 31),
+//     bigIntUtils.beInt2Buff(deposit.tokenAddr, 31),
+//     bigIntUtils.beInt2Buff(deposit.tokenId, 31),
+//     bigIntUtils.beInt2Buff(deposit.secret, 31),
+//   ]);
 
-  deposit.nullifierHash = poseidonHash([deposit.nullifier, deposit.tokenAddr, deposit.tokenId]);
-  deposit.commitment = poseidonHash([deposit.nullifier, deposit.tokenAddr, deposit.tokenId, deposit.secret]);
-  deposit.commitmentHex = toHex(deposit.commitment);
-  deposit.nullifierHex = toHex(deposit.nullifierHash);
+//   deposit.nullifierHash = poseidonHash([deposit.nullifier, deposit.tokenAddr, deposit.tokenId]);
+//   deposit.commitment = poseidonHash([deposit.nullifier, deposit.tokenAddr, deposit.tokenId, deposit.secret]);
+//   deposit.commitmentHex = toHex(deposit.commitment);
+//   deposit.nullifierHex = toHex(deposit.nullifierHash);
 
-  // console.log('🚀 => createDeposit => deposit.preimage', deposit.preimage);
-  // console.log('🚀 => createDeposit => deposit', deposit);
-  return deposit;
-}
+//   return deposit;
+// }
 
-function getNoteString(depositData, nftAdd, tokenId) {
-  const note = toHex(depositData.preimage, 124);
-  const noteString = `blender-${nftAdd}-${tokenId}-${netId}-${note}`;
-  console.log(`NOTE STRING CREATED: ${noteString}`);
-  return noteString;
-}
+// function getNoteString(depositData, nftAdd, tokenId) {
+//   const note = toHex(depositData.preimage, 124);
+//   const noteString = `blender-${nftAdd}-${tokenId}-${netId}-${note}`;
+//   console.log(`NOTE STRING CREATED: ${noteString}`);
+//   return noteString;
+// }
 
 /**
  * Make a deposit
@@ -167,19 +165,20 @@ function getNoteString(depositData, nftAdd, tokenId) {
  * @param amount Deposit amount
  */
 async function deposit({ nftAdd, tokenId }) {
-  const deposit = createDeposit({
-    nullifier: rbigint(31),
-    secret: rbigint(31),
+  const deposit = snarkUtils.createDeposit({
+    nullifier: convert.rbigint(31),
+    secret: convert.rbigint(31),
     tokenAddr: BigInt(nftAdd),
     tokenId: BigInt(tokenId),
   });
-  const noteString = getNoteString(deposit, nftAdd, tokenId);
-  console.log('🚀🚀🚀🚀🚀 Submitting deposit transaction to Blender Contract');
+  const noteString = snarkUtils.getNoteString(deposit);
+  logMessage('✅ Submitting deposit transaction to Blender Contract', '- -');
   const tx = await blender
     .connect(senderAccount)
-    .depositNft(toHex(deposit.commitment), nftAdd, tokenId, ethers.utils.parseEther('1'), true);
+    .depositNft(convert.toHex(deposit.commitment), nftAdd, tokenId, ethers.utils.parseEther('1'), true);
   let res = await tx.wait();
-  console.log('🚀🚀🚀🚀🚀 DEPOSIT NFT TO BLENDER  SUCCESSFUL :');
+  logMessage('✅ Deposit NFT to Blender Successful');
+  logMessage('', '--');
   return noteString;
 }
 

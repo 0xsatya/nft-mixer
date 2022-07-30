@@ -16,7 +16,7 @@ interface IVerifier {
         uint256[2] memory a,
         uint256[2][2] memory b,
         uint256[2] memory c,
-        uint256[4] memory input
+        uint256[2] memory input
     ) external returns (bool);
 }
 
@@ -37,7 +37,7 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
         uint32 leafIndex,
         uint256 timestamp
     );
-    event NFTWithdrawn(bytes32 nullifierHash, address recipient, address token, uint256 tokenId, uint256 value, bool isERC721);
+    event NFTWithdrawn(bytes32 nullifierHash, address recipient, address token, uint256 tokenId, bool isERC721);
     event TransferOwnership(bytes32 _commitment, uint32 insertedIndex, uint256 timestamp);
 
     constructor(
@@ -91,7 +91,7 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
         return hasher3.poseidon(input);
     }
 
-    function parseProof(bytes memory proof, uint256[4] memory _input) internal returns (bool r) {
+    function parseProof(bytes memory proof, uint256[2] memory _input) internal returns (bool r) {
         // solidity does not support decoding uint[2][2] yet
         (uint256[2] memory a, uint256[2] memory b1, uint256[2] memory b2, uint256[2] memory c) = abi.decode(
             proof,
@@ -106,8 +106,6 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
         uint256 _root,
         uint256 _nullifierHash,
         address payable _recipient,
-        address payable _relayer,
-        uint256 _fee,
         uint256 _nullifier,
         address _tokenAddrs,
         uint256 _tokenId,
@@ -118,11 +116,9 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
         require(!nullifierHashes[bytes32(_nullifierHash)], "The note has been already spent");
         require(isKnownRoot(bytes32(_root)), "Cannot find your merkle root"); // Make sure to use a recent one
 
-        uint256[4] memory _input;
+        uint256[2] memory _input;
         _input[0] = uint256(_root);
         _input[1] = uint256(_nullifierHash);
-        _input[2] = uint256(uint160(_tokenAddrs));
-        _input[3] = _tokenId;
 
         bool result = parseProof(_proof, _input);
 
@@ -136,12 +132,17 @@ contract NFTBlender is IERC1155Receiver, IERC721Receiver, ReentrancyGuard, Merkl
             input[0] = uint256(_nullifier);
             input[1] = uint256(uint160(_tokenAddrs));
             input[2] = uint256(_tokenId);
+
             require(_nullifierHash == (hasher3.poseidon(input)), "nullifier Hash mismatch");
+
             _processWithdrawNft(_tokenAddrs, _tokenId, _recipient, isERC721);
-            emit NFTWithdrawn(bytes32(_nullifierHash), _recipient, _tokenAddrs, _tokenId, _fee, isERC721);
+
+            emit NFTWithdrawn(bytes32(_nullifierHash), _recipient, _tokenAddrs, _tokenId, isERC721);
         } else {
             require(!commitments[_commitment], "The commitment has been submitted");
+
             uint32 _insertedIndex = insertCommitment(_commitment);
+
             emit TransferOwnership(_commitment, _insertedIndex, block.timestamp);
             emit NFTDeposited(_tokenAddrs, _tokenId, 0, isERC721, _commitment, _insertedIndex, block.timestamp);
         }
