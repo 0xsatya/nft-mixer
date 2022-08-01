@@ -40,6 +40,13 @@ function getNoteString(depositData) {
   return noteString;
 }
 
+function getNoteString(depositData, nftAdd, tokenId, netId) {
+  const note = toHex(depositData.preimage, 124);
+  const noteString = `blender-${nftAdd}-${tokenId}-${netId}-${note}`;
+  console.log(`NOTE STRING CREATED: ${noteString}`);
+  return noteString;
+}
+
 module.exports = {
   pedersenHash,
   createDeposit,

@@ -5,6 +5,7 @@ const { poseidon } = require('circomlibjs');
 const bigIntUtils = require('ffjavascript').utils;
 
 const poseidonHash = (items) => BigNumber.from(poseidon(items).toString());
+const poseidonHash2 = (a, b) => poseidon([a, b]);
 
 /** Generate random number of specified byte length */
 const randomBN = (nbytes = 31) => BigNumber.from(crypto.randomBytes(nbytes));
@@ -35,6 +36,7 @@ function toFixedHex(number, length = 32) {
 
 module.exports = {
   poseidonHash,
+  poseidonHash2,
   randomBN,
   toFixedHex,
   rbigint,
