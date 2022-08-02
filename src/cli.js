@@ -16,6 +16,7 @@ const params = require('../utils/params');
 const convert = require('../utils/conversion-utils');
 const etherUtils = require('../utils/ether-uitls');
 const snarkUtils = require('../utils/snark-utils');
+const merkkUtils = require('../utils/merkle-utils');
 
 // const {
 //   toFixedHex,
@@ -183,32 +184,26 @@ async function deposit({ nftAdd, tokenId }) {
 }
 
 // transfer NFT ownership
-async function transferNftOwnership({
-  deposit,
-  recipient,
-  transferAccount,
-  newCommData,
-  relayerURL = '0',
-  refund = '0',
-  fee = '0',
-}) {
-  let relayer = 0;
+async function transferNftOwnership({ deposit, recipient, transferAccount, newCommData }) {
+  logMessage('✅ Generating SNARK Proof', '- -');
+
   let isWithdraw = false;
-  console.log('GENERATING SNARK PROOF...');
+
   const { proofData, args } = await generateProof({ deposit, recipient, isWithdraw });
-  console.log('newCommData :', newCommData);
-  console.log('🚀🚀🚀🚀🚀 SUBMITTING TRANSFER TXN...');
-  let solProof = getSolidityProof(proofData.proof);
+  console.log('🚀 ~ new commitment data: ', newCommData.commitment);
 
-  console.log('args, newComm.commitment :', args, newCommData.commitment);
+  logMessage('✅ Submitting Transfer Transaction', '- -');
 
-  let tx = await blender
-    .connect(transferAccount)
-    .withdrawNft(solProof, ...args, toHex(newCommData.commitment), {
+  let solProof = snarkUtils.getSolidityProof(proofData.proof);
+
+  let tx = await (
+    await blender.connect(transferAccount).withdrawNft(solProof, ...args, toHex(newCommData.commitment), {
       gasLimit: 50000000,
-    });
-  let res = await tx.wait();
-  console.log('----- Transfer Tx Done -----');
+    })
+  ).wait();
+
+  logMessage('✅ Transfer Tx Done');
+  logMessage('', '--');
 }
 
 /**
@@ -218,70 +213,73 @@ async function transferNftOwnership({
  * @param deposit Deposit object
  */
 async function generateMerkleProof(deposit, { blender }) {
-  // console.log('🚀 => generating merkle proof...');
+  logMessage('✅ Building Merkle Tree', '- -');
 
-  const { events, tree } = await buildMerkleTree(blender);
-  // console.log('🚀 => generateMerkleProof => events', events);
+  const { events, tree } = await merkUtils.buildMerkleTree(
+    blender,
+    MERKLE_TREE_HEIGHT,
+    convert.poseidonHash2,
+    ZERO_VALUE,
+  );
 
   const depositEvent = events.find((e) => e.args.commitment === toHex(deposit.commitment));
   const leafIndex = depositEvent ? depositEvent.args.leafIndex : -1;
 
   const root = tree.root;
-  console.log('generateMerkleProof ~ root', root);
   const contractRoot = await blender.getLastRoot();
-  console.log('generateMerkleProof ~ contractRoot', BigNumber.from(contractRoot));
 
   const isValidRoot = await blender.isKnownRoot(toHex(root));
   const isSpent = await blender.isSpent(toHex(deposit.nullifierHash));
   assert(isValidRoot === true, 'Merkle tree is corrupted');
   assert(isSpent === false, 'The note is already spent');
   assert(leafIndex >= 0, 'The deposit is not found in the tree');
+  assert(toHex(root) === contractRoot, 'Solidity Root and JS Root did not match');
 
   const { pathElements, pathIndices } = tree.path(leafIndex);
   return { pathElements, pathIndices, root: tree.root };
 }
 
-function getNewTree(leaves) {
-  return new MerkleTree(MERKLE_TREE_HEIGHT, leaves, {
-    hashFunction: poseidonHash2,
-    zeroElement: ZERO_VALUE,
-  });
-}
+// function getNewTree(leaves) {
+//   return new MerkleTree(MERKLE_TREE_HEIGHT, leaves, {
+//     hashFunction: poseidonHash2,
+//     zeroElement: ZERO_VALUE,
+//   });
+// }
 
 /**
  * builds merkle tree
  * @param {contract} blenderContract blender NFT Mixer contract
  * @returns all the events from the block chain and new merkle tree
  */
-async function buildMerkleTree({ blenderContract }) {
-  const filter = blender.filters.NFTDeposited();
-  const latestBlcok = await ethers.provider.getBlockNumber();
-  const events = await blender.queryFilter(filter, 0, latestBlcok);
+// async function buildMerkleTree({ blenderContract }) {
+//   const filter = blender.filters.NFTDeposited();
+//   const latestBlcok = await ethers.provider.getBlockNumber();
+//   const events = await blender.queryFilter(filter, 0, latestBlcok);
 
-  // console.log('buildMerkleTree ~ events', events);
+//   // console.log('buildMerkleTree ~ events', events);
 
-  const leaves = events
-    .sort((a, b) => a.args.leafIndex - b.args.leafIndex)
-    .map((e) => BigNumber.from(e.args.commitment));
+//   const leaves = events
+//     .sort((a, b) => a.args.leafIndex - b.args.leafIndex)
+//     .map((e) => BigNumber.from(e.args.commitment));
 
-  console.log('🚀 => buildMerkleTree => leaves', leaves);
+//   console.log('🚀 => buildMerkleTree => leaves', leaves);
 
-  const tree = getNewTree(leaves);
+//   const tree = getNewTree(leaves);
 
-  // console.log('buildMerkleTree ~ tree', tree.root, tree);
+//   // console.log('buildMerkleTree ~ tree', tree.root, tree);
 
-  return { events: events, tree: tree };
-}
+//   return { events: events, tree: tree };
+// }
 
-function toObject(input) {
-  const strInput = JSON.stringify(input, (key, value) =>
-    typeof value === 'bigint' ? value.toString() : value,
-  );
+// function toObject(input) {
+//   const strInput = JSON.stringify(input, (key, value) =>
+//     typeof value === 'bigint' ? value.toString() : value,
+//   );
 
-  const formatInput = JSON.parse(strInput, (key, value) => (value.type === 'BigNumber' ? value.hex : value));
-  // console.log('toObject ~ formatInput', formatInput);
-  return formatInput;
-}
+//   const formatInput = JSON.parse(strInput, (key, value) => (value.type === 'BigNumber' ? value.hex : value));
+//   // console.log('toObject ~ formatInput', formatInput);
+//   return formatInput;
+// }
 
 /**
  * Generate SNARK proof for withdrawal
@@ -327,7 +325,7 @@ async function generateProof({
   const zkeyPath = circutPath + '/nftMixer_final.zkey';
 
   console.log('🚀 creating proof data from input, wasm and zkey');
-  const proofData = await exportCallDataGroth16(toObject(input), wasmPath, zkeyPath);
+  const proofData = await exportCallDataGroth16(convert.toObject(input), wasmPath, zkeyPath);
 
   console.log('Directly verifying from verifier coontract :');
   let verResult = await verifier.verifyProof(proofData.a, proofData.b, proofData.c, proofData.publicInput);
@@ -382,19 +380,19 @@ async function exportCallDataGroth16(input, wasmPath, zkeyPath) {
   return { a, b, c, publicInput, proof, solidityProofInput };
 }
 
-function getSolidityProof(proof) {
-  return (
-    '0x' +
-    toFixedHex(proof.pi_a[0]).slice(2) +
-    toFixedHex(proof.pi_a[1]).slice(2) +
-    toFixedHex(proof.pi_b[0][0]).slice(2) +
-    toFixedHex(proof.pi_b[0][1]).slice(2) +
-    toFixedHex(proof.pi_b[1][0]).slice(2) +
-    toFixedHex(proof.pi_b[1][1]).slice(2) +
-    toFixedHex(proof.pi_c[0]).slice(2) +
-    toFixedHex(proof.pi_c[1]).slice(2)
-  );
-}
+// function getSolidityProof(proof) {
+//   return (
+//     '0x' +
+//     toFixedHex(proof.pi_a[0]).slice(2) +
+//     toFixedHex(proof.pi_a[1]).slice(2) +
+//     toFixedHex(proof.pi_b[0][0]).slice(2) +
+//     toFixedHex(proof.pi_b[0][1]).slice(2) +
+//     toFixedHex(proof.pi_b[1][0]).slice(2) +
+//     toFixedHex(proof.pi_b[1][1]).slice(2) +
+//     toFixedHex(proof.pi_c[0]).slice(2) +
+//     toFixedHex(proof.pi_c[1]).slice(2)
+//   );
+// }
 
 /**
  * Do an ETH withdrawal
@@ -772,17 +770,16 @@ async function main() {
         await deployBlender();
         let { nftAdd, tokenId } = await setupTestToken();
 
-        // console.log('🧨 nftAdd and tokenId :', nftAdd, tokenId);
         isERC721 = true;
-        console.log('🚀 🚀 🚀 🚀 🚀 🚀 🚀   DEPOSIT NFT  🚀 🚀 🚀 🚀 🚀 🚀 🚀 🚀 🚀 ');
+        logMessage('DEPOSIT NFT', '➡️', 2);
 
         let noteString = await deposit({ nftAdd: nftAdd, tokenId: tokenId });
-        let nftOwner1 = await getNftTokenOwner(tokenId, isERC721);
+        let nftOwner1 = await etherUtils.getNftTokenOwner(tokenId, isERC721);
         console.log('🚀 => .action => nftOwner1 after deposit - to be blenderACct:', nftOwner1);
 
         let { tokenAddr, tokenId: nftId, netId, deposit: depositObj } = parseNote(noteString);
 
-        console.log('🚀 🚀 🚀 🚀 🚀 🚀 🚀   TRANSFER NFT OWNERSHIP 🚀 🚀 🚀 🚀 🚀 🚀 🚀 🚀 🚀 ');
+        logMessage('TRANSFER NFT OWNERSHIP', '➡️', 2);
 
         // transfer NFT onchain in Blender contract
         const transferNftData = createDeposit({
@@ -803,7 +800,8 @@ async function main() {
           newCommData: transferNftData,
         });
 
-        console.log('🚀 🚀 🚀 🚀 🚀 🚀 🚀   WITHDRAW NFT 🚀 🚀 🚀 🚀 🚀 🚀 🚀 🚀 🚀 ');
+        logMessage('WITHDRAW NFT', '➡️', 2);
+
         let parseNoteData = parseNote(newNoteString);
 
         const recipient = account3.address;

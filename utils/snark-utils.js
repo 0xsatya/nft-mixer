@@ -36,12 +36,27 @@ function createDeposit({ nullifier, secret, tokenAddr, tokenId }) {
 function getNoteString(depositData) {
   const note = toHex(depositData.preimage, 124);
   const noteString = `blender-${note}`;
-  console.log(`NOTE STRING CREATED: ${noteString}`);
+  console.log(`NOTE STRING CREATED: ${noteString} \n`);
   return noteString;
+}
+
+function getSolidityProof(proof) {
+  return (
+    '0x' +
+    toFixedHex(proof.pi_a[0]).slice(2) +
+    toFixedHex(proof.pi_a[1]).slice(2) +
+    toFixedHex(proof.pi_b[0][0]).slice(2) +
+    toFixedHex(proof.pi_b[0][1]).slice(2) +
+    toFixedHex(proof.pi_b[1][0]).slice(2) +
+    toFixedHex(proof.pi_b[1][1]).slice(2) +
+    toFixedHex(proof.pi_c[0]).slice(2) +
+    toFixedHex(proof.pi_c[1]).slice(2)
+  );
 }
 
 module.exports = {
   pedersenHash,
   createDeposit,
   getNoteString,
+  getSolidityProof,
 };
