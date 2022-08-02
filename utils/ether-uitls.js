@@ -60,7 +60,7 @@ async function setupAccounts() {
 async function getNftTokenOwner(contract, tokenId, isERC721, accountAdd = 0x0) {
   try {
     if (isERC721) return await contract.ownerOf(tokenId);
-    else return await erc1155Mock.balanceOf(accountAdd, tokenId);
+    else return await contract.balanceOf(accountAdd, tokenId);
   } catch (error) {
     console.log('ERROR :', error);
     return false;

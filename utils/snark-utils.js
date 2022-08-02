@@ -5,7 +5,7 @@ const { poseidon } = require('circomlibjs');
 const circomlibjs = require('circomlibjs');
 const bigIntUtils = require('ffjavascript').utils;
 
-const { poseidonHash, toHex } = require('./conversion-utils');
+const { poseidonHash, toHex, toFixedHex } = require('./conversion-utils');
 
 /** Compute pedersen hash using js*/
 const pedersenHash = (data) => {
@@ -36,7 +36,7 @@ function createDeposit({ nullifier, secret, tokenAddr, tokenId }) {
 function getNoteString(depositData) {
   const note = toHex(depositData.preimage, 124);
   const noteString = `blender-${note}`;
-  console.log(`NOTE STRING CREATED: ${noteString} \n`);
+  console.log(`🚀 ~ NOTE STRING CREATED: ${noteString} \n`);
   return noteString;
 }
 

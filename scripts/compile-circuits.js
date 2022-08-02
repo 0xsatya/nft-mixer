@@ -10,11 +10,11 @@ const paths = require('../utils/params');
 logger.useDefaults();
 
 async function main() {
-  const circuitName = path.circuitName;
-  const circuitPath = path.circuitPath;
-  const circuitBuildPath = path.circuitBuildPath;
-  const contractPath = path.contractPath;
-  const circuitInputPath = path.circuitInputPath;
+  const circuitName = paths.circuitName;
+  const circuitPath = paths.circuitPath;
+  const circuitBuildPath = paths.circuitBuildPath;
+  const contractPath = paths.contractPath;
+  const circuitInputPath = paths.circuitInputPath;
   const solidityVersion = config.solidity.version;
   const toBuild = true;
 
@@ -33,12 +33,12 @@ async function main() {
     }
 
     logger.log(
-      `circom2 ${circuitPath}/${circuitName}.circom --r1cs --wasm --sym --output ./${circuitBuildPath}/build`,
+      `circom2 ${circuitPath}/${circuitName}.circom --r1cs --wasm --sym --output ${circuitBuildPath}/build`,
     );
 
     logger.log('----------- compiling circuit --------');
     await exec(
-      `circom2 ${circuitPath}/${circuitName}.circom --r1cs --wasm --sym --output ./${circuitBuildPath}/build`,
+      `circom2 ${circuitPath}/${circuitName}.circom --r1cs --wasm --sym --output ${circuitBuildPath}/build`,
     );
 
     logger.log('exporting circuit to json format');
@@ -78,7 +78,7 @@ async function main() {
 
     logger.log('-----------witness-----------');
     await wtns.calculate(
-      JSON.parse(fs.readFileSync(`${circuitPath}/${circuitInputPath}`, 'utf8')),
+      JSON.parse(fs.readFileSync(`${circuitInputPath}`, 'utf8')),
       `${circuitBuildPath}/build/${circuitName}_js/${circuitName}.wasm`,
       `${circuitBuildPath}/output/${circuitName}.wtns`,
     );
